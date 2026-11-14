@@ -1,0 +1,313 @@
+{
+  "name": "WF2 · Lead import (any file → leads)",
+  "nodes": [
+    {
+      "id": "410a78a5-4d63-4525-90e7-b2753182c9d9",
+      "name": "Mapping request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-map",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "webhookId": "349c5ca3-d8fc-4380-ba0f-69a8644ea457",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "743fdee6-fe79-47ea-b3f1-2c7424a170b9",
+      "name": "Build mapping prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const { headers = [], sample = [] } = $input.first().json.body || {};\nconst system = 'You map spreadsheet columns to a CRM lead schema. Fields: name, phone, email, location, budget, notes. ' +\n  'Use \"extra\" for anything else. Each field may be used at most once, except \"extra\". Reply with JSON only: {\"mapping\": {\"<column>\": \"<field>\"}}.';\nconst user = 'Columns: ' + JSON.stringify(headers) + '\\nSample rows: ' + JSON.stringify(sample.slice(0, 5));\nreturn [{ json: { headers, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] } }];"
+      },
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "34489468-3d27-47f1-b925-81970e9a08a8",
+      "name": "Ask Groq for mapping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}"
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "id": "17323bbd-e574-44ff-af04-40e44604b579",
+      "name": "Read mapping",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const allowed = ['name', 'phone', 'email', 'location', 'budget', 'notes', 'extra'];\nconst headers = $('Build mapping prompt').first().json.headers;\nlet mapping = null;\ntry {\n  const parsed = JSON.parse($input.first().json.choices[0].message.content).mapping || {};\n  mapping = {};\n  for (const h of headers) mapping[h] = allowed.includes(parsed[h]) ? parsed[h] : 'extra';\n} catch (e) { mapping = null; }          // browser falls back to keyword matching\nreturn [{ json: { mapping } }];"
+      },
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "id": "af76c9c7-676f-4124-904c-044dbb98fbbe",
+      "name": "Return mapping",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ mapping: $json.mapping }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "id": "6c0ce906-9122-47cd-a859-93765f922a87",
+      "name": "Import request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-import",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "webhookId": "300633f4-0a4b-469c-8507-cd2fb565e550",
+      "position": [
+        0,
+        180
+      ]
+    },
+    {
+      "id": "1d675a76-f737-4402-9435-a328a1f5e9a2",
+      "name": "Clean leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Server-side safety net: normalise phones, drop invalid rows, dedupe, whitelist fields.\nconst rows = ($input.first().json.body || {}).leads || [];\nconst norm = raw => {\n  let p = String(raw || '').replace(/[^\\d+]/g, '');\n  if (p.startsWith('00')) p = '+' + p.slice(2);\n  if (!p.startsWith('+')) {\n    if (p.length === 10) p = '+91' + p;\n    else if (p.length === 12 && p.startsWith('91')) p = '+' + p;\n    else if (p.length === 11 && p.startsWith('0')) p = '+91' + p.slice(1);\n  }\n  return /^\\+\\d{10,15}$/.test(p) ? p : null;\n};\nconst seen = new Set();\nconst leads = [];\nfor (const r of rows) {\n  const phone = norm(r.phone);\n  if (!phone || seen.has(phone)) continue;\n  seen.add(phone);\n  leads.push({\n    phone,\n    name: r.name ? String(r.name).slice(0, 120) : null,\n    email: r.email || null, location: r.location || null, budget: r.budget || null,\n    notes: r.notes || null, source: r.source || 'upload',\n    extra: r.extra && typeof r.extra === 'object' ? r.extra : {},\n    campaign_id: 'divyasree-wow',\n  });\n}\nreturn [{ json: { leads, received: rows.length } }];"
+      },
+      "position": [
+        260,
+        180
+      ]
+    },
+    {
+      "id": "8d186dbd-74d9-4dbd-bc8e-f9acdf3e581d",
+      "name": "Save new leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?on_conflict=phone",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.leads) }}"
+      },
+      "position": [
+        520,
+        180
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "id": "8dbf4e75-05b5-438e-933c-73f73293a696",
+      "name": "Count imported",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const imported = $input.all().filter(i => i.json && i.json.id).length;\nconst received = $('Clean leads').first().json.received;\nreturn [{ json: { imported, received, skipped: received - imported } }];"
+      },
+      "position": [
+        780,
+        180
+      ]
+    },
+    {
+      "id": "9cf9dd31-42d2-46fb-bd98-7655780cd3d7",
+      "name": "Return result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "position": [
+        1040,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Mapping request": {
+      "main": [
+        [
+          {
+            "node": "Build mapping prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build mapping prompt": {
+      "main": [
+        [
+          {
+            "node": "Ask Groq for mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Groq for mapping": {
+      "main": [
+        [
+          {
+            "node": "Read mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read mapping": {
+      "main": [
+        [
+          {
+            "node": "Return mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Import request": {
+      "main": [
+        [
+          {
+            "node": "Clean leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean leads": {
+      "main": [
+        [
+          {
+            "node": "Save new leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save new leads": {
+      "main": [
+        [
+          {
+            "node": "Count imported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count imported": {
+      "main": [
+        [
+          {
+            "node": "Return result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

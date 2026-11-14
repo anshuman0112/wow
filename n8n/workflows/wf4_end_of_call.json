@@ -1,0 +1,539 @@
+{
+  "name": "WF4 · End-of-call save (Vapi → Supabase)",
+  "nodes": [
+    {
+      "id": "d3e48058-06c2-4382-a858-72c74baaf6f2",
+      "name": "Vapi events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-events",
+        "responseMode": "onReceived",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "webhookId": "c4393e75-3712-4702-a506-ab39fd220d21",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "de0d43c8-917b-400e-8422-da7feadf4758",
+      "name": "Is end-of-call report?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d3bc18f0-899b-4002-9e0e-58820e4d15ef",
+              "leftValue": "={{ $json.body?.message?.type === 'end-of-call-report' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "2e1d243c-5510-4786-b09f-3e4ccb2591f2",
+      "name": "Wait for AI analysis",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 8,
+        "unit": "seconds"
+      },
+      "webhookId": "266267a1-8aa5-4a21-a593-b73beef29395",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "id": "bdb07473-0edd-41d1-a517-44b20fca85e8",
+      "name": "Fetch full call from Vapi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.vapi.ai/call/{{ $('Vapi events').first().json.body.message.call.id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.VAPI_PRIVATE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "id": "b842ae63-9c21-444b-a02c-c84ca037f7c3",
+      "name": "Build call row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Combine the webhook report with the freshly fetched call (which has the AI analysis attached).\nconst msg = $('Vapi events').first().json.body.message;\nconst fetched = $input.first().json || {};\nconst call = fetched.id ? fetched : (msg.call || {});\nconst art = { ...(msg.artifact || {}), ...(fetched.artifact || {}) };\n\n// AI analysis (Vapi Structured Output named \"Lead Qualification\")\nconst outputs = Object.values(art.structuredOutputs || {});\nconst q = (outputs.find(o => o && o.name === 'Lead Qualification') || {}).result || {};\n\n// Conversation: keep only Aanya (\"bot\") and the lead (\"user\")\nconst messages = (art.messages || msg.messages || [])\n  .filter(m => ['bot', 'assistant', 'user'].includes(m.role))\n  .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.message || m.content || '', t: m.secondsFromStart }));\nconst aiLines = messages.filter(m => m.role === 'assistant').map(m => m.text).join('\\n');\nconst transcript = art.transcript || messages.map(m => (m.role === 'user' ? 'Lead: ' : 'Aanya: ') + m.text).join('\\n');\n\nconst recordingUrl = art.recordingUrl || art.recording?.mono?.combinedUrl || art.stereoRecordingUrl || msg.recordingUrl || null;\nconst startedAt = msg.startedAt || call.startedAt || null;\nconst endedAt = msg.endedAt || call.endedAt || null;\nconst duration = msg.durationSeconds ?? (startedAt && endedAt ? (new Date(endedAt) - new Date(startedAt)) / 1000 : null);\nconst vars = call.assistantOverrides?.variableValues || {};\nconst leadId = call.metadata?.lead_id || null;\nconst ext = (recordingUrl || '').split('?')[0].split('.').pop() || 'wav';\nconst id = call.id || msg.call?.id;\n\nconst row = {\n  vapi_call_id: id,\n  lead_id: /^[0-9a-f-]{36}$/i.test(leadId || '') ? leadId : null,\n  name: call.customer?.name || vars.name || null,\n  phone: call.customer?.number || null,\n  call_type: call.type || null,\n  started_at: startedAt,\n  ended_at: endedAt,\n  duration_sec: duration,\n  ended_reason: msg.endedReason || call.endedReason || null,\n  cost_usd: msg.cost ?? call.cost ?? null,\n  recording_url: recordingUrl,\n  transcript,\n  ai_lines: aiLines,\n  messages,\n  summary: q.summary || msg.analysis?.summary || art.summary || null,\n  interest: ['hot', 'warm', 'cold'].includes(q.interest) ? q.interest : null,\n  intent: q.intent || null,\n  geography_fit: q.geography_fit || null,\n  budget_fit: q.budget_fit || null,\n  timeline_fit: q.timeline_fit || null,\n  sentiment_start: q.sentiment_start || null,\n  sentiment_end: q.sentiment_end || null,\n  language: q.language || null,\n  callback_time: q.callback_time || null,\n  do_not_call: q.do_not_call === true,\n  analysis: q,\n  raw: msg,\n};\nreturn [{ json: { row, lead_id: row.lead_id, phone: row.phone, recordingUrl, storagePath: id + '.' + ext } }];"
+      },
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "id": "7caf4d39-f568-4515-b5b8-729c96759eb8",
+      "name": "Save call to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/calls?on_conflict=vapi_call_id",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.row) }}"
+      },
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "id": "922cb0ad-5f4e-48df-bff2-bd0fb650f80b",
+      "name": "Prepare lead update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const b = $('Build call row').first().json;\nconst r = b.row;\nif (!b.lead_id && !b.phone) return [];          // browser demo call: no lead to update\nconst reason = r.ended_reason || '';\nconst noAnswer = ['did-not-answer', 'customer-busy', 'voicemail', 'failed-to-connect', 'no-answer'].some(x => reason.includes(x));\nconst patch = {\n  status: r.do_not_call ? 'do_not_call' : (noAnswer ? 'no_answer' : 'called'),\n  last_called_at: r.ended_at || new Date().toISOString(),\n};\nif (!noAnswer && r.interest) patch.interest = r.interest;\nif (!noAnswer && r.callback_time) patch.callback_time = r.callback_time;\nconst filter = b.lead_id ? 'id=eq.' + b.lead_id : 'phone=eq.' + encodeURIComponent(b.phone);\nreturn [{ json: { filter, patch } }];"
+      },
+      "position": [
+        1560,
+        0
+      ]
+    },
+    {
+      "id": "2b6aa7f1-83ee-4556-b437-8504010b4b9e",
+      "name": "Update lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?{{ $json.filter }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.patch) }}"
+      },
+      "position": [
+        1820,
+        0
+      ]
+    },
+    {
+      "id": "fdb87d31-2d53-49b2-a048-1d35846e6c12",
+      "name": "Has recording?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "6ff7087d-9617-42ed-bf4e-01c6437b05ef",
+              "leftValue": "={{ !!$('Build call row').first().json.recordingUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1560,
+        180
+      ]
+    },
+    {
+      "id": "01d5421b-8c74-4d03-a467-1578580b88d6",
+      "name": "Download recording",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Build call row').first().json.recordingUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        1820,
+        180
+      ]
+    },
+    {
+      "id": "d86dee96-64dc-4d44-8bc4-3887f87dbce2",
+      "name": "Upload to Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/storage/v1/object/recordings/{{ $('Build call row').first().json.storagePath }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "x-upsert",
+              "value": "true"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data"
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        2080,
+        180
+      ]
+    },
+    {
+      "id": "7805f63c-abeb-4069-ada2-2368c1da1ee5",
+      "name": "Save storage path",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/calls?vapi_call_id=eq.{{ $('Build call row').first().json.row.vapi_call_id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ storage_path: 'recordings/' + $('Build call row').first().json.storagePath }) }}"
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        2340,
+        180
+      ]
+    },
+    {
+      "id": "9ef6dcf4-bb83-4e7b-9e35-842085b569cf",
+      "name": "Is hot lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "8b05d0c1-3fa0-4673-b9fb-7245d6969564",
+              "leftValue": "={{ $('Build call row').first().json.row.interest === 'hot' && !!$env.TELEGRAM_BOT_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1560,
+        360
+      ]
+    },
+    {
+      "id": "4db49d6e-eb32-4fbc-b8f3-e27b384a3893",
+      "name": "Send Telegram alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: '🔥 Hot lead: ' + ($('Build call row').first().json.row.name || 'Web caller') + '\\nCallback: ' + ($('Build call row').first().json.row.callback_time || '—') + '\\n\\n' + ($('Build call row').first().json.row.summary || '') }) }}"
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        1820,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "Vapi events": {
+      "main": [
+        [
+          {
+            "node": "Is end-of-call report?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is end-of-call report?": {
+      "main": [
+        [
+          {
+            "node": "Wait for AI analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for AI analysis": {
+      "main": [
+        [
+          {
+            "node": "Fetch full call from Vapi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch full call from Vapi": {
+      "main": [
+        [
+          {
+            "node": "Build call row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build call row": {
+      "main": [
+        [
+          {
+            "node": "Save call to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save call to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare lead update",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has recording?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is hot lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare lead update": {
+      "main": [
+        [
+          {
+            "node": "Update lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has recording?": {
+      "main": [
+        [
+          {
+            "node": "Download recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download recording": {
+      "main": [
+        [
+          {
+            "node": "Upload to Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Storage": {
+      "main": [
+        [
+          {
+            "node": "Save storage path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is hot lead?": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,0 +1,28 @@
+# n8n for Vaani, running in Docker.
+#   docker compose up -d                 → start n8n at http://localhost:5678
+#   npm run n8n:import                   → import the 4 workflows (first time)
+#   docker compose logs -f n8n           → watch logs
+#   docker compose down                  → stop (your data stays in the n8n_data volume)
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.46.3
+    container_name: vaani-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"   # lets workflows read $env.SUPABASE_URL etc.
+      GENERIC_TIMEZONE: Asia/Kolkata
+      TZ: Asia/Kolkata
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"              # allow login over http://localhost
+      WEBHOOK_URL: ${N8N_PUBLIC_URL:-http://localhost:5678/}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+
+volumes:
+  n8n_data:

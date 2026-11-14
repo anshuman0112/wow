@@ -1,0 +1,289 @@
+{
+  "name": "WF3 · Auto-dialer (Vapi + Twilio)",
+  "nodes": [
+    {
+      "id": "d7328101-f898-4f87-bd45-f18dc0e88161",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "ee63f9cf-a121-403e-a3f0-d3935802eb6c",
+      "name": "Calling hours check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }).format(new Date()));\nif (hour < 10 || hour >= 19) return [];               // only call 10:00–18:59 IST\nif (!$env.VAPI_ASSISTANT_ID || !$env.VAPI_PHONE_NUMBER_ID) {\n  throw new Error('Set VAPI_ASSISTANT_ID and VAPI_PHONE_NUMBER_ID in .env, then restart n8n.');\n}\nreturn [{ json: { hour } }];"
+      },
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "094c9808-adb9-49fe-ae33-51905d1582a5",
+      "name": "Get leads to call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?select=id,name,phone,location,attempts&status=in.(new,no_answer)&attempts=lt.2&order=created_at.asc&limit={{ $env.DIALER_BATCH || 2 }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "id": "2fd52860-05ad-4448-b488-db5bf3d1598c",
+      "name": "Mark as calling",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?id=eq.{{ $json.id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'calling', attempts: ($json.attempts || 0) + 1, last_called_at: new Date().toISOString() }) }}"
+      },
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "id": "2355a1fb-d9f2-49a1-8ffc-901f466c6b96",
+      "name": "Start Vapi phone call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.vapi.ai/call",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.VAPI_PRIVATE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ assistantId: $env.VAPI_ASSISTANT_ID, phoneNumberId: $env.VAPI_PHONE_NUMBER_ID, customer: { number: $json.phone, name: $json.name || undefined }, assistantOverrides: { variableValues: { name: ($json.name || '').split(' ')[0], location: $json.location || '' } }, metadata: { lead_id: $json.id, campaign_id: 'divyasree-wow' } }) }}"
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "id": "411079f7-b7cf-40f7-b8aa-20e2ec1c5f24",
+      "name": "Call failed to start?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7c96ca71-0c9e-40be-8bbf-a5a377dbd976",
+              "leftValue": "={{ !!$json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "id": "aa1abc25-d5a3-405c-a927-d3b48bf97d9c",
+      "name": "Mark as no answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?id=eq.{{ $('Mark as calling').item.json.id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'no_answer' }) }}"
+      },
+      "position": [
+        1560,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Calling hours check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calling hours check": {
+      "main": [
+        [
+          {
+            "node": "Get leads to call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get leads to call": {
+      "main": [
+        [
+          {
+            "node": "Mark as calling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as calling": {
+      "main": [
+        [
+          {
+            "node": "Start Vapi phone call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Vapi phone call": {
+      "main": [
+        [
+          {
+            "node": "Call failed to start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call failed to start?": {
+      "main": [
+        [
+          {
+            "node": "Mark as no answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

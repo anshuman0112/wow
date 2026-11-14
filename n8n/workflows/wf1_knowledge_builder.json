@@ -1,0 +1,209 @@
+{
+  "name": "WF1 · Knowledge builder (document → fact sheet)",
+  "nodes": [
+    {
+      "id": "ea779ad8-885d-4634-9ebf-78ad78934c3f",
+      "name": "Knowledge request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "knowledge-build",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "webhookId": "12e370ee-cbca-43fd-8682-6430668ad359",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "6f67dfa1-a783-4d48-b9a3-cc4a9e97be2b",
+      "name": "Build extraction prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const { text = '', campaign_id = 'divyasree-wow' } = $input.first().json.body || {};\nif (text.length < 50) throw new Error('Send the document text in the \"text\" field.');\nconst system = 'You turn a business document into a fact sheet for a phone sales agent. ' +\n  'Copy facts exactly as written; never add, infer, round or guess anything. ' +\n  'Group into sections such as Overview, Pricing, Location, Nearby, Amenities, Timeline, FAQs (skip empty ones). ' +\n  'Reply with JSON only: {\"sections\":[{\"title\":\"...\",\"facts\":[\"...\"]}]}';\nreturn [{ json: { campaign_id, messages: [{ role: 'system', content: system }, { role: 'user', content: text.slice(0, 60000) }] } }];"
+      },
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "760fd724-e00f-4b41-9a1f-a1ca79e2d7e4",
+      "name": "Ask Groq to extract facts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}"
+      },
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "id": "b76c5384-977f-4c3b-ae03-95e81d929e36",
+      "name": "Format fact sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const { sections = [] } = JSON.parse($input.first().json.choices[0].message.content);\nconst facts_md = sections.map(s => '## ' + s.title + '\\n' + s.facts.map(f => '- ' + f).join('\\n')).join('\\n\\n');\nreturn [{ json: { campaign_id: $('Build extraction prompt').first().json.campaign_id, facts_md, sections } }];"
+      },
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "id": "fb2df949-d968-465a-a9c6-266f4aac61db",
+      "name": "Save to campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/campaigns?id=eq.{{ $json.campaign_id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ facts_md: $json.facts_md }) }}"
+      },
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "id": "541c9f5c-48a3-4554-bb46-3e2102d03b3d",
+      "name": "Return fact sheet",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ facts_md: $('Format fact sheet').first().json.facts_md, sections: $('Format fact sheet').first().json.sections }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "position": [
+        1300,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Knowledge request": {
+      "main": [
+        [
+          {
+            "node": "Build extraction prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build extraction prompt": {
+      "main": [
+        [
+          {
+            "node": "Ask Groq to extract facts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Groq to extract facts": {
+      "main": [
+        [
+          {
+            "node": "Format fact sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format fact sheet": {
+      "main": [
+        [
+          {
+            "node": "Save to campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to campaign": {
+      "main": [
+        [
+          {
+            "node": "Return fact sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

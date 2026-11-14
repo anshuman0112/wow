@@ -1,0 +1,19 @@
+{
+  "name": "vaani-voice-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vaani: outbound AI voice agent (Aanya) for Divyasree Whispers of the Wind",
+  "scripts": {
+    "prompt": "node scripts/sync_assistant.js --dry-run",
+    "sync": "node scripts/sync_assistant.js",
+    "dev": "python -m http.server 5173 --directory web",
+    "n8n": "docker compose up -d && echo n8n running at http://localhost:5678",
+    "n8n:stop": "docker compose down",
+    "n8n:logs": "docker compose logs -f n8n",
+    "n8n:build": "node n8n/build_workflows.js",
+    "n8n:import": "docker compose exec n8n n8n import:workflow --separate --input=/workflows",
+    "n8n:no-docker": "node scripts/start_n8n.js"
+  },
+  "engines": { "node": ">=20" }
+}
