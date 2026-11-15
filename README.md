@@ -1,46 +1,58 @@
 # Vaani — AI calling agent for Divyasree "Whispers of the Wind"
 
-**Vaani** is an outbound AI voice agent. Its agent, **Aanya**, calls property leads as a **Divyasree consultant** and works through the qualification checkpoints from the assignment brief. Every call is then saved, summarised and scored automatically.
+**Vaani** is an outbound AI voice agent. Its agent, **Aanya**, calls property leads as a **Divyasree consultant** and follows the assignment's conversation flow. Every call is then saved, summarised and scored automatically.
 
 > Built for the Revspot assignment *"AI Voice Agent Design – Divyasree Whispers of the Wind"*.
 >
 > 🔗 **Live demo:** https://vaani-divyasree.vercel.app. Open **Talk to Aanya**, allow the microphone, and press **Start call**.
-> 📄 System prompt: [`docs/System_Prompt.pdf`](docs/System_Prompt.pdf) · ✅ The **Assignment checklist** page in the app maps every line of the brief.
+> 📞 **Get a real phone call:** open **Leads**, then **Want Aanya to call you?**, verify your number (about 30 s), and press **Call me now**.
+> 📄 **System prompt:** [`docs/System_Prompt.pdf`](docs/System_Prompt.pdf) · ✅ The **Assignment checklist** page in the app maps every line of the brief.
 
 ---
 
 ## What it does
 
-1. **Calls the lead** and introduces itself as a Divyasree consultant, names the project and its location, and **asks permission to speak**.
-2. **Qualifies the lead on 4 checkpoints:** intent (self-use or investment), geography (Nandi Hills corridor), budget (₹92.4 lakh+) and timeline (December 2029). It never asks again for something the lead has already said.
-3. **Pitches** the "Private Valley" lifestyle: a 20,000 sq.ft. clubhouse, 74% open space and eco-parks.
-4. **Books a callback** with a Property Expert.
-5. **Saves everything:** recording, full transcript, AI summary, the hot / warm / cold score, mood and callback time.
+1. **Introduction:** Aanya introduces herself as a Divyasree consultant, names the project and its location near Nandi Hills, and **asks permission to speak**.
+2. **Qualification, the 4 checkpoints, in order:** intent (self-use or investment), geography (the Nandi Hills / Devanahalli corridor), budget (₹92.4 lakh+) and timeline (phased delivery, December 2029). She never asks again for something the lead already said.
+3. **The pitch:** the "Private Valley" lifestyle, with 74% open green space, eco-parks, a 20,000 sq.ft. clubhouse and a like-minded community.
+4. **CTA:** she books a follow-up call with a **Property Expert**, and lets the lead choose the day and time.
+5. **Saves everything:** the full transcript, an AI summary, a hot / warm / cold score, each checkpoint's answer, mood and callback time.
 
-**Bonus features from the brief**
-- **Edge cases:** irritated user, budget fits but location doesn't, off-topic questions and more.
-- **English + Hindi / Hinglish.**
-- **Extra project details,** researched online.
+**Bonus points from the brief**
+
+| Bonus | How Aanya handles it |
+|---|---|
+| **Edge cases** | **Budget fits, location doesn't:** treats it as a weekend escape (30 min to the airport, 10 min to STRR), stresses the growth corridor and future exposure, then offers to show how buyers hold it purely as an investment. **Location fits, budget doesn't:** explains that payments are staged until 2029 (not all upfront), that plot loans keep the monthly outgo light, that the buyer enters early in a growth corridor, and that "the gap is only about X lakh", then closes politely. **Irritated, angry or busy:** apologises, keeps it short, offers a callback, or ends the call. |
+| **English + Hindi** | Switches to Hinglish when the lead does, and back to English when they do. |
+| **Extra project details** | Facts researched online: 38 acres, about 207 plots, RERA, about ₹7,700 per sq.ft., schools, hospitals and distances. |
+
+Persuasion stays **truthful**. Aanya never quotes an EMI amount, a down payment, a discount or a guaranteed return; the Property Expert confirms exact numbers.
 
 ---
 
-## Example: one call, start to finish
+## Example: one real phone call (shortened)
 
 ```
-Aanya: Hello Rahul! This is Aanya, a consultant from Divyasree Developers, calling about
-       Whispers of the Wind near Nandi Hills. Is this a good time for two minutes?
-Rahul: Haan, boliye. Investment ke liye dekh raha hoon, budget around 70 lakh.
-Aanya: Samajh gayi. Plots 92.4 laakh se shuru hote hain, aur payments construction ke saath
-       linked hain. Kya Nandi Hills aur Devanahalli ka area aapke liye theek hai?
-  …     (timeline → pitch → expert callback booked for Friday 6 PM)
+Aanya: Hello Rahul! This is Aanya, a consultant from Divyasree Developers, calling about Whispers of the
+       Wind, our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?
+Rahul: Yes.
+Aanya: Great! Are you looking for a weekend home or an investment?
+Rahul: Both. And what are the amenities, nearby schools, and how far is the airport?
+Aanya: A 20,000 sq ft clubhouse, pool, gym, sports courts and eco-parks; GITAM and Stonehill International
+       School are nearby; the airport is about 30–35 minutes away. Are you comfortable with the Nandi Hills side?
+Rahul: Yes. But my budget is around 80 lakhs.
+Aanya: Understood, and many of our buyers started with a similar budget. Payments are staged with construction
+       until December 2029, so you don't pay it all upfront, and our Property Expert can arrange plot-loan
+       options... Shall I have our expert show you a payment plan around your budget?
+Rahul: Yeah sure. Tomorrow around 1 pm.
+Aanya: Perfect, a short Property Expert call tomorrow at 1 pm. Thank you, Rahul. Have a great day!
 ```
-Rahul switched to Hindi and named his intent and budget in one sentence. Aanya switched language with him and didn't ask either question again.
 
-After the call, this appears in the dashboard automatically:
+After the call, this appears on the **Calls** page automatically:
 
-| Interest | Intent | Budget | Location | Timeline | Callback | Mood |
-|---|---|---|---|---|---|---|
-| 🟡 Warm | Investment | Stretch (~₹70 L) | Yes | Yes | Fri 6 PM | calm → calm |
+| Interest | Intent | Budget | Location | Timeline | Callback |
+|---|---|---|---|---|---|
+| 🟡 Warm | Weekend home + investment | Below entry (~₹80 L) | Yes | Yes | Tomorrow 1 PM |
 
 ---
 
@@ -48,108 +60,141 @@ After the call, this appears in the dashboard automatically:
 
 ```mermaid
 flowchart LR
-  A[Leads file<br/>CSV / Excel / SQL] -->|WF2 import| DB[(Supabase)]
-  DB -->|WF3 auto-dialer| V[Vapi call<br/>Aanya]
-  W[Web demo page] --> V
-  V -->|end-of-call report| N[n8n WF4]
-  N -->|recording, transcript,<br/>summary, score| DB
-  N -->|hot lead| T[Telegram alert]
-  DB --> D[Dashboard]
+  L[Leads file<br/>CSV / Excel / JSON / SQL] -->|import| API
+  D[Dashboard<br/>web/] -->|Talk to Aanya| V[Vapi browser call]
+  D -->|Call phone| API[Python API<br/>FastAPI on Vercel]
+  API -->|dial| T[Twilio]
+  T <-->|speech ⇄ replies| API
+  API <-->|AI replies| G[Groq LLM]
+  API <-->|live session + FAQ cache| R[(Upstash Redis)]
+  V -->|end-of-call report| API
+  API -->|calls, transcripts, scores| DB[(Supabase)]
+  DB --> D
 ```
 
-| Part | Tool | Job |
+| Part | Tool (all free tiers) | Job |
 |---|---|---|
-| Voice call | **Vapi** | Listening, turn-taking, interruptions, recording |
-| Ears | **Deepgram nova-3** (multi) | Speech to text, English + Hindi |
-| Brain | **GPT-4.1-mini** (via Vapi credits) | Follows the system prompt and answers only from the facts |
-| Voice | **ElevenLabs Flash v2.5** | Riya (default), Sia or Anika — Indian English + Hindi |
-| Automation | **n8n** (Docker) | Saves calls, imports leads, auto-dials, alerts |
-| Database | **Supabase** | Leads, calls, recordings (phone numbers masked in the dashboard) |
-| Dashboard | Plain HTML + JS | Overview, Talk to Aanya, Leads, Calls, Campaign, Checklist |
+| Dashboard | Plain HTML + JS | Overview, Talk to Aanya, Phone voices, Leads, Calls, Campaign, Checklist |
+| Backend | **Python FastAPI** on Vercel | Saves calls, imports leads, places phone calls, runs the phone conversation |
+| Browser calls | **Vapi** (Deepgram nova-3, GPT-4.1-mini, ElevenLabs Flash v2.5) | Low-latency voice demo with interruptions, English + Hindi |
+| Phone calls | **Twilio** trial | Rings the lead, turns speech into text, and speaks with a premium voice (Google Chirp3-HD) |
+| Phone brain | **Groq** (gpt-oss-120b / 20b) | Writes each reply from the compact system prompt |
+| Cache | **Upstash Redis** | Live call sessions (about 15 ms) and **zero-token answers** to the most-asked questions |
+| Database | **Supabase** | Leads, calls and analysis (the dashboard sees masked phone numbers) |
 
-**Why there's no RAG:** all the project facts fit inside the prompt (about 2k tokens). That makes answers faster, means a wrong document chunk can never be retrieved, and keeps the prompt cacheable. If the bot doesn't know something, it says *"our Property Expert will confirm that"* instead of guessing.
+**Speed and cost tricks**
+- **FAQ cache:** price, amenities, schools, hospitals, location, possession, RERA and payment questions are answered from facts in Redis, in English or Hindi, using **0 AI tokens**.
+- **Prompt caching:** the system prompt is identical on every turn, so the provider reuses it.
+- **Reply budget:** if the AI takes longer than 3 s, Aanya answers from the script instead of going silent.
+- **Guardrails in code:** Aanya never invents a meeting time, covers all 4 checkpoints before the pitch and CTA, and every reply ends with the next question.
+
+**Why there's no RAG:** all the project facts fit inside the prompt (about 2.6k tokens). That is faster, means a wrong document chunk can never be retrieved, and keeps the prompt cacheable. If Aanya doesn't know something, she says *"our Property Expert will confirm that"*.
+
+---
+
+## Using the app
+
+| Page | What you can do |
+|---|---|
+| **Talk to Aanya** | Talk to her in the browser, as a generic lead or as a lead from your list (`#/talk/<leadId>`). |
+| **Phone voices** | Press ▶ to hear 7 phone voices, and pick the one used on every phone call. |
+| **Leads** | Import any lead file (columns are detected automatically), add a lead by hand, verify a number, or press **Call phone**. |
+| **Calls** | See each call's transcript, summary, score, checkpoints and callback time. |
+| **Campaign & knowledge** | Facts, flow, edge cases and pronunciation: everything Aanya knows. |
+| **Assignment checklist** | Every requirement of the brief and where it is covered. |
+
+### About the free Twilio trial
+- It can only call **verified** numbers. Anyone can verify their own number on the **Leads** page: Twilio rings them, and they type the 6-digit code shown on screen.
+- Every trial call starts with Twilio's short trial message ("press any key"). A paid Twilio account removes it.
+- Phone networks carry 8 kHz audio, which is why the phone voices are HD voices built for phone lines.
 
 ---
 
 ## Project layout
 
 ```
-web/                  Dashboard + "Talk to Aanya" demo (static site, deployable to Vercel)
-  js/campaign-data.js Facts, flow, voices, pronunciation — the single source of truth
-prompts/              System prompt template
-docs/                 System_Prompt.pdf, system_prompt.md, N8N_GUIDE.md
-vapi/assistant.js     Vapi assistant config (voice, brain, interruptions, analysis)
-supabase/schema.sql   Database tables + masked views + recordings bucket
-n8n/                  4 workflows (generated by build_workflows.js)
-scripts/              One-command helpers (see below)
-docker-compose.yml    Runs n8n
+api/index.py            Vercel entry point for the Python API
+backend/                FastAPI app
+  main.py               All /api routes
+  phone_agent.py        Phone conversation loop (Twilio speech ⇄ Groq), compact prompt, call analysis
+  faq.py                Zero-token FAQ answers, objection handling, checkpoint tracker, guardrails
+  voices.py             Phone voice library, chosen voice, browser preview token
+  phone.py              Places calls, verifies numbers
+  calls.py              Saves Vapi browser calls (transcript, recording, analysis)
+  leads.py              Lead import with AI column mapping
+  cache.py              Redis sessions + FAQ cache
+  stream_agent.py       Live-audio streaming engine (off: the Twilio trial blocks Media Streams)
+web/                    Dashboard (static site)
+  js/campaign.json      Facts, flow, edge cases, FAQ answers, voices: the single source of truth
+prompts/                System prompt template
+docs/                   System_Prompt.pdf, system_prompt.md, evaluation reports
+supabase/schema.sql     Tables, masked views, recordings bucket
+scripts/                Helpers: sync assistant, apply schema, evaluate, export PDF
+n8n/                    Earlier automation version (replaced by the Python API, kept for reference)
 ```
 
 ---
 
-## Setup (about 15 minutes)
+## Setup
 
-You need Node 20+, Docker Desktop, and free accounts on Supabase, Vapi, ElevenLabs, Groq and Vercel. Cloudflare Tunnel needs no account.
+You need **Python 3.11+**, **Node 20+**, and free accounts on Supabase, Vapi, Groq, Twilio, Upstash and Vercel.
 
-1. **Keys:** copy `.env.example` to `.env` and fill it in. Keys go in the file, never in code or chat.
-2. **Database:**
+1. **Keys:** copy `.env.example` to `.env` and fill it in. Keys go in that file, never in code or chat.
+2. **Python packages:**
+   ```bash
+   python -m venv .venv
+   ```
+   ```bash
+   .venv/Scripts/pip install -r requirements.txt -r requirements-dev.txt
+   ```
+   (On macOS or Linux, use `.venv/bin/pip`.)
+3. **Database:**
    ```bash
    npm run db:schema
    ```
-3. **Automations:** start n8n, then import the workflows, then open http://localhost:5678 and switch them on.
-   ```bash
-   npm run n8n
-   ```
-   ```bash
-   npm run n8n:import
-   ```
-4. **Create Aanya in Vapi.** This also fills the IDs into `web/js/config.js`.
+4. **Create or update Aanya in Vapi.** This also writes the public IDs into `web/js/config.js`:
    ```bash
    npm run sync
    ```
-5. **Open a public link to n8n.** This uses a free Cloudflare tunnel with no account needed. Keep the window open. It updates `.env`, the web app, Vapi's webhook and the live site by itself.
-   ```bash
-   npm run tunnel
-   ```
-6. **Open the app:**
+5. **Run locally:** run the dashboard on http://localhost:5173. Local pages use the live API.
    ```bash
    npm run dev
    ```
-   Go to http://localhost:5173 → **Talk to Aanya** → **Start call**.
-7. **Real phone calls (optional).** Add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` to `.env`, then run the command below. After that, use **Leads → Call now**, or let the auto-dialer call new leads between 10 AM and 7 PM IST.
+   To run the API yourself on http://localhost:8000:
    ```bash
-   npm run twilio
+   npm run api
    ```
-
-Full n8n walkthrough: [`docs/N8N_GUIDE.md`](docs/N8N_GUIDE.md).
+6. **Publish the site and API to Vercel.** First add the same keys from `.env` as Vercel environment variables.
+   ```bash
+   npm run deploy
+   ```
 
 ## Handy commands
 
 | Command | What it does |
 |---|---|
-| `npm run tunnel` | Public link for n8n; updates Vapi + the live site automatically |
-| `npm run deploy` | Publish the dashboard to https://vaani-divyasree.vercel.app |
-| `npm run twilio` | Connect a Twilio number to Aanya for real phone calls |
-| `npm run n8n:activate` | Re-import and switch on all n8n workflows |
+| `npm run dev` | Dashboard on http://localhost:5173 |
+| `npm run api` | Python API on http://localhost:8000 (API docs at `/docs`) |
+| `npm run deploy` | Publish the dashboard and API to https://vaani-divyasree.vercel.app |
 | `npm run sync` | Rebuild the system prompt and update Aanya in Vapi |
-| `npm run prompt` | Only rebuild `docs/system_prompt.md` (no keys needed) |
+| `npm run prompt` | Rebuild `docs/system_prompt.md` only (no keys needed) |
 | `npm run pdf` | Export `docs/System_Prompt.pdf` |
-| `npm run voices` | Pull your ElevenLabs voices (with previews) into the voice picker |
+| `npm run eval` | Run the conversation test scenarios → `docs/eval_report.md` |
 | `npm run db:schema` | Create or update the database |
-| `npm run n8n` / `n8n:stop` / `n8n:logs` | Run n8n in Docker |
 
 ## Reuse it for another business
 
-Everything Aanya knows comes from `web/js/campaign-data.js`. To use Vaani for, say, a hospital calling patients for check-ups:
-1. Change the persona, flow, facts and pronunciation in that file. You can also paste a document into n8n's **Knowledge builder** to draft the facts automatically.
-2. Run `npm run sync`.
+Everything Aanya knows lives in `web/js/campaign.json`: persona, flow, facts, FAQ answers, objections, pronunciation and voices. To use Vaani for, say, a hospital calling patients for check-ups:
+1. Edit that file. You can also send a document to `POST /api/knowledge/build` to draft the facts automatically.
+2. Run `npm run sync`, then `npm run deploy`.
 3. Upload the patient list on the **Leads** page.
 
 There's no code to change.
 
 ## Privacy and safety
-- Private keys live only in `.env` (git-ignored). The browser only gets public keys.
-- The browser's Vapi key is **locked** to this site and to Aanya, so nobody can reuse it elsewhere to spend credits.
-- Every call is capped at 4 minutes and hangs up after 15 seconds of silence. "Call now" asks for confirmation first.
-- The dashboard reads through views that **mask phone numbers**. Only n8n can write to the database.
-- Aanya never invents prices, EMIs or discounts. She admits she's an AI if asked, and stops calling anyone who says "don't call".
+- Private keys live only in `.env` (git-ignored) and in Vercel's environment variables. The browser only gets public keys.
+- The browser's Vapi key is **locked** to this site and to Aanya, so nobody can reuse it elsewhere.
+- Twilio requests are checked against the account, and number verification is rate-limited, to prevent abuse.
+- The dashboard reads through views that **mask phone numbers**; only the backend writes to the database.
+- Calls are capped in length. "Call phone" asks for confirmation first.
+- Aanya never invents prices, EMIs or discounts. She admits she's an AI if asked, and never calls again anyone who says "don't call".
