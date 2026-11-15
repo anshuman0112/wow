@@ -138,11 +138,10 @@ def stt_attrs(stt: str | None, lang: str) -> str:
 
 
 def barge_in() -> bool:
-    """Let the lead talk over Divya? Off by default: on phone lines, noise and the echo of her own voice were
-    heard as "the lead is talking", which kept cutting her off mid-word (sounded like a breaking voice).
-    With it off she finishes each reply cleanly and listening starts the moment she stops."""
+    """Let the lead talk over Divya? On in the standard mode (as it always was). The optional Nova-3 mode turns
+    it off: that model heard line noise / echo as speech and kept cutting Divya off (a breaking voice)."""
     import os
-    return os.environ.get("PHONE_BARGE_IN", "0") == "1"
+    return os.environ.get("PHONE_BARGE_IN", "1") == "1"   # on, as it always was (the lead can talk over Divya)
 
 
 def instant_on() -> bool:
@@ -158,7 +157,7 @@ def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = N
     # answered at once instead of after the silence wait.
     partial_url = escape(f"{base}/api/phone/partial?lead={quote(lead_id)}")
     partial = f' partialResultCallback="{partial_url}"' if instant else ""
-    barge = "true" if barge_in() else "false"
+    barge = "false" if (stt if stt in STT_PRESETS else stt_preset()) == "nova3" else ("true" if barge_in() else "false")
     silence = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}&silence=1")
     language = "hi-IN" if lang == "hi" else "en-IN"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
@@ -318,7 +317,8 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
                             row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"), raw.get("stt"), raw.get("instant", False))
     # Cut off mid-sentence ("can you please tell me when you…")? Don't answer half a question:
     # keep listening silently and join it with what they say next.
-    if not answer_now and looks_unfinished(speech, raw.get("stt") == "nova3") and not raw.get("pending"):
+    # Only in the optional Nova-3 mode; the standard mode answers what Twilio heard, exactly as before.
+    if not answer_now and raw.get("stt") == "nova3" and looks_unfinished(speech, True) and not raw.get("pending"):
         raw["pending"] = speech.strip()
         xml = twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), raw.get("instant", False))
         if fp:
