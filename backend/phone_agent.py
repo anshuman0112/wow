@@ -178,11 +178,17 @@ DANGLING = re.compile(r"\b(the|a|an|and|or|but|of|to|for|with|when|what|which|wh
                       r"then|kya|ki|ka|ke|aur|ya|toh)\s*,?\s*$", re.I)
 
 
-def looks_unfinished(speech: str) -> bool:
+def looks_unfinished(speech: str, punctuated_model: bool = False) -> bool:
+    """Was the lead cut off mid-sentence?
+    Deepgram Nova-3 ends every finished sentence with . ? or ! (on real calls: "Yes.", "Can you please tell me
+    what is the cost?") and sends cut-off ones without ("Yes. I'm", "Me about all", "This is"). So with Nova-3,
+    no end punctuation = keep listening. Other models: only an unpunctuated dangling last word counts."""
     s = (speech or "").strip()
-    if not s or len(s.split()) < 2 or s[-1] in ".?!":
+    if not s or s[-1] in ".?!":
         return False
-    return bool(DANGLING.search(s))
+    if punctuated_model:
+        return True
+    return len(s.split()) >= 2 and bool(DANGLING.search(s))
 
 
 def twiml_listen(lead_id: str, lang: str, stt: str | None, instant: bool) -> str:
@@ -193,7 +199,7 @@ def twiml_listen(lead_id: str, lang: str, stt: str | None, instant: bool) -> str
     language = "hi-IN" if lang == "hi" else "en-IN"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
             f'<Gather input="speech" action="{action}" method="POST" language="{language}" '
-            f'{stt_attrs(stt, lang)} timeout="4" hints="{escape(HINTS)}" actionOnEmptyResult="false"></Gather>'
+            f'{stt_attrs(stt, lang)} timeout="2" hints="{escape(HINTS)}" actionOnEmptyResult="false"></Gather>'
             f'<Redirect method="POST">{silence}</Redirect></Response>')
 
 
@@ -294,7 +300,7 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
                             row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"), raw.get("stt"), raw.get("instant", False))
     # Cut off mid-sentence ("can you please tell me when you…")? Don't answer half a question:
     # keep listening silently and join it with what they say next.
-    if not answer_now and looks_unfinished(speech) and not raw.get("pending"):
+    if not answer_now and looks_unfinished(speech, raw.get("stt") == "nova3") and not raw.get("pending"):
         raw["pending"] = speech.strip()
         await save_session(http, sb, call_sid, row)
         print(f"[phone] unfinished, still listening: {speech.strip()[:60]!r}", flush=True)
@@ -577,7 +583,7 @@ async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: s
     if before != said:   # still talking (or first copy): remember and wait for the next update
         await cache.put_text(http, key, said, 120)
         return "listening"
-    if looks_unfinished(heard):
+    if looks_unfinished(heard, raw.get("stt") == "nova3"):
         return "unfinished"
     if not await cache.claim(http, f"turn:{call_sid}:{n}"):
         return "taken"

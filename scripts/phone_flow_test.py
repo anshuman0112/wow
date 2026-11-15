@@ -92,8 +92,22 @@ async def main() -> None:
         check(st == 200 and "<Say" in x and "still there" not in x, "silence after a cut-off -> answers what it heard (no loop)",
               says(x)[:90])
 
+        # From the last call: lead paused after "Yes. I'm", then went on. Must NOT answer the half sentence.
+        st, x, srv = await lead("Yes. I'm")
+        check(st == 200 and "<Say" not in x, "'Yes. I'm' (cut off, no full stop) -> keeps listening, no answer", says(x))
+        st, x, srv = await lead("fine with that location.")
+        check(st == 200 and "<Say" in x, "...rest arrives -> one answer to the whole sentence", f"{srv} {says(x)[:80]}")
+        st, x, srv = await lead("Me about all")
+        check(st == 200 and "<Say" not in x, "'Me about all' (fragment) -> keeps listening", says(x))
+        st, x, srv = await lead("the amenities?")
+        check(st == 200 and ("clubhouse" in x.lower() or "amenit" in x.lower() or "pool" in x.lower()),
+              "...joined -> amenities answered", f"{srv} {says(x)[:80]}")
+
+        # Unpunctuated but complete: answered after the short listening window (silence), not lost.
         st, x, srv = await lead("The EMI plan and the loan")
-        check(st == 200 and "EMI" in x and "upfront" in x, "EMI question answered properly", f"{srv} {says(x)[:90]}")
+        check(st == 200 and "<Say" not in x, "unpunctuated sentence -> listens briefly first", says(x))
+        st, x, srv = await post("/api/phone/turn?lead=&silence=1", {})
+        check(st == 200 and "EMI" in x and "upfront" in x, "...then answered properly (EMI)", f"{srv} {says(x)[:90]}")
         st, x, srv = await lead("Can you please tell me what is the cost?")
         check(st == 200 and "ninety-two point four lakh" in x, "cost question answered", f"{srv} {says(x)[:90]}")
 
