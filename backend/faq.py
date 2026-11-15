@@ -24,7 +24,7 @@ INTENTS: dict[str, str] = {
     "schools": r"\b(schools?|colleges?|education|university)\b",
     "hospitals": r"\b(hospitals?|clinics?|medical|healthcare|doctors?)\b",
     "location": r"\b(where|location|located|kahan|address|airport|distance|how far|kitni door|connectivity)\b",
-    "possession": r"\b(possession|handover|hand over|ready to move|completion|kab tak|delivery date)\b",
+    "possession": r"\b(possession|handover\w*|handing over|hand over|ready to move|completion|kab tak|delivery date)\b",
     "rera": r"\b(rera|approvals?|legal|registered|registration)\b",
     "payment": r"\b(emi|loan|loans|payment plan|installments?|discount|discounts|offer|offers)\b",
 }
@@ -52,7 +52,10 @@ def detect(utterance: str) -> list[str]:
             extra = [k for k in extra if k != "size"]
         return ["price"] + extra[:2] \
             + (["rate"] if re.search(INTENTS["rate"], u) else [])
-    if not re.search(QUESTION, u) or re.search(STATEMENT, u) or len(u.split()) > 22:
+    # A short noun phrase about a topic ("the EMI plan and the loan", "handover of the project") is a question too.
+    topic_only = len(u.split()) <= 8 and any(re.search(INTENTS[k], u) for k in ("payment", "possession", "amenities",
+                                                                                   "schools", "hospitals", "rera"))
+    if (not re.search(QUESTION, u) and not topic_only) or re.search(STATEMENT, u) or len(u.split()) > 22:
         return []
     if re.search(r"\b(exact|exactly|corner|specific|which plot|negotiat)", u):
         return []   # needs a careful "the expert will confirm" answer from the LLM, not a general fact

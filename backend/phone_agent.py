@@ -36,7 +36,7 @@ def phone_voice() -> str:
 
 
 VOICE = phone_voice()   # premium Indian-English voice (Google Chirp3-HD / Amazon generative), see campaign.json
-MAX_TURNS = 14                     # keeps calls ~3 minutes and protects free quotas
+MAX_TURNS = 30                     # ~5+ minutes: room for questions; the flow itself closes in 2-3 minutes
 # Words Twilio's speech recognition should expect (improves "70 lakh" vs "7260 lacs").
 HINTS = ("lakh, lakhs, crore, seventy lakh, one crore, Nandi Hills, Devanahalli, Divyasree, Whispers of the Wind, "
          "investment, weekend home, self use, budget, amenities, clubhouse, schools, hospitals, airport, possession, "
@@ -111,15 +111,74 @@ def greeting(name: str | None, callback: bool = False) -> str:
             "our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?")
 
 
-def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = None) -> str:
+# How Twilio decides the lead has finished speaking (the biggest part of the pause on a phone call).
+#   auto   : old default model, stops "at the first pause" but is slow to finalise (what we used first)
+#   nova3  : Deepgram Nova-3 (Gather 2.0), ends after 1 s of silence, accurate on Indian English
+#   google : Google STT V2 telephony (short utterances), ends after 1 s of silence
+#   conv   : Twilio's generic conversational model (auto-picks a provider), ends after 1 s of silence
+STT_PRESETS = {
+    "auto": 'speechTimeout="auto"',
+    "nova3": 'speechModel="deepgram_nova-3" speechTimeout="1"',
+    "google": 'speechModel="googlev2_telephony_short" speechTimeout="1"',
+    "conv": 'speechModel="experimental_conversations" speechTimeout="1"',
+}
+
+
+def stt_preset() -> str:
+    import os
+    v = os.environ.get("PHONE_STT", "auto").strip()
+    return v if v in STT_PRESETS else "auto"
+
+
+def stt_attrs(stt: str | None, lang: str) -> str:
+    stt = stt if stt in STT_PRESETS else stt_preset()
+    if lang == "hi" and stt == "nova3":
+        stt = "conv"   # Hindi/Hinglish: let Twilio pick a provider that handles hi-IN
+    return STT_PRESETS[stt]
+
+
+def instant_on() -> bool:
+    import os
+    return os.environ.get("PHONE_INSTANT", "0") == "1"
+
+
+def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = None, stt: str | None = None,
+                 instant: bool = False) -> str:
+    base = settings().public_base_url
+    action = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}")
+    # Instant mode: Twilio sends the words while the lead is still talking, so a plain "yes" can be
+    # answered at once instead of after the silence wait.
+    partial_url = escape(f"{base}/api/phone/partial?lead={quote(lead_id)}")
+    partial = f' partialResultCallback="{partial_url}"' if instant else ""
+    silence = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}&silence=1")
+    language = "hi-IN" if lang == "hi" else "en-IN"
+    return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
+            f'<Gather input="speech" action="{action}" method="POST" language="{language}" '
+            f'{stt_attrs(stt, lang)}{partial} timeout="6" bargeIn="true" hints="{escape(HINTS)}" actionOnEmptyResult="false">'
+            f'{says(say, voice)}</Gather>'
+            f'<Redirect method="POST">{silence}</Redirect></Response>')
+
+
+# Words a finished sentence doesn't end on: the lead was cut off (paused to think) mid-sentence.
+DANGLING = re.compile(r"\b(the|a|an|and|or|but|of|to|for|with|when|what|which|where|how|is|are|was|about|"
+                      r"you|your|me|my|our|this|that|can|could|please|tell|like|so|because|if|then|"
+                      r"any|some|kya|ki|ka|ke|aur|ya|toh|mein)\s*(\.\.\.|…|\.|,)?\s*$", re.I)
+
+
+def looks_unfinished(speech: str) -> bool:
+    s = (speech or "").strip()
+    return bool(s) and len(s.split()) >= 2 and bool(DANGLING.search(s))
+
+
+def twiml_listen(lead_id: str, lang: str, stt: str | None, instant: bool) -> str:
+    """Keep listening without saying anything (the lead hasn't finished their sentence)."""
     base = settings().public_base_url
     action = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}")
     silence = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}&silence=1")
     language = "hi-IN" if lang == "hi" else "en-IN"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
             f'<Gather input="speech" action="{action}" method="POST" language="{language}" '
-            f'speechTimeout="auto" timeout="6" bargeIn="true" hints="{escape(HINTS)}" actionOnEmptyResult="false">'
-            f'{says(say, voice)}</Gather>'
+            f'{stt_attrs(stt, lang)} timeout="4" hints="{escape(HINTS)}" actionOnEmptyResult="false"></Gather>'
             f'<Redirect method="POST">{silence}</Redirect></Response>')
 
 
@@ -157,7 +216,8 @@ async def save_session(http: httpx.AsyncClient, sb: Supabase, call_sid: str, row
 
 
 async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number: str | None,
-                callback: bool = False) -> str:
+                callback: bool = False, stt: str | None = None, voice_override: str | None = None,
+                instant: bool | None = None) -> str:
     """First request when the lead answers: create the session row and greet them."""
     sb = Supabase(http)
     lead = (await cache.get_lead(http, lead_id)) or {}   # stashed by "Call now" → no database trip
@@ -166,19 +226,21 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number:
         lead = rows[0] if rows else {}
     hello = greeting(lead.get("name"), callback)
     from . import voices
-    voice = lead.get("voice") or await voices.selected(http)   # chosen in the dashboard
+    voice = (voice_override if voice_override and voices.valid(voice_override) else None)         or lead.get("voice") or await voices.selected(http)   # chosen in the dashboard
+    stt = stt if stt in STT_PRESETS else stt_preset()
+    instant = (instant_on() if instant is None else instant) and cache.fast_enough()   # needs Redis to hand turns over
     row = {
         "vapi_call_id": _sid_key(call_sid), "lead_id": lead.get("id"), "name": lead.get("name"),
         "phone": lead.get("phone") or to_number, "call_type": "twilioPhoneCall",
         "started_at": datetime.now(timezone.utc).isoformat(),
         "messages": [{"role": "assistant", "text": hello}],
-        "raw": {"engine": "twilio-gather", "voice": voice, "callback": callback, "silences": 0, "lang": "en", "location": lead.get("location"),
+        "raw": {"engine": "twilio-gather", "voice": voice, "stt": stt, "instant": instant, "callback": callback, "silences": 0, "lang": "en", "location": lead.get("location"),
                 "session_store": "redis" if cache.fast_enough() else "supabase"},
     }
     # Fast path: the call lives in Redis and is written to Supabase after hang-up (status callback).
     if not await cache.set_session(http, call_sid, row):
         await sb.upsert("calls", row, "vapi_call_id")
-    return twiml_gather(hello, lead.get("id") or "", voice=voice)
+    return twiml_gather(hello, lead.get("id") or "", voice=voice, stt=stt, instant=instant)
 
 
 async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str, silence: bool) -> str:
@@ -192,6 +254,8 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     messages = row.setdefault("messages", [])
     raw = row.setdefault("raw", {})
 
+    if (silence or not speech.strip()) and raw.get("pending"):
+        speech, silence = raw.pop("pending"), False   # they stopped after all: answer what we heard
     if silence or not speech.strip():
         raw["silences"] = raw.get("silences", 0) + 1
         if raw["silences"] >= 2:
@@ -203,12 +267,37 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
                 await finish(http, call_sid, ended_reason="silence-timed-out")
             return twiml_goodbye(bye, raw.get("voice"))   # with Redis, Twilio's hang-up callback saves + analyses the call
         await save_session(http, sb, call_sid, row)
-        return twiml_gather("Are you still there?", row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"))
+        return twiml_gather("Are you still there?", row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"), raw.get("stt"), raw.get("instant", False))
 
     if TRIAL_NOISE.search(speech) and len(messages) <= 1:
         await save_session(http, sb, call_sid, row)
         return twiml_gather("Sorry about that. As I was saying, is this a good time for two minutes?",
-                            row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"))
+                            row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"), raw.get("stt"), raw.get("instant", False))
+    # Cut off mid-sentence ("can you please tell me when you…")? Don't answer half a question:
+    # keep listening silently and join it with what they say next.
+    if looks_unfinished(speech) and not raw.get("pending"):
+        raw["pending"] = speech.strip()
+        await save_session(http, sb, call_sid, row)
+        print(f"[phone] unfinished, still listening: {speech.strip()[:60]!r}", flush=True)
+        return twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), raw.get("instant", False))
+    if raw.get("pending"):
+        speech = f"{raw.pop('pending')} {speech.strip()}"
+    il = raw.get("instant_last")
+    if il and time.time() - il.get("t", 0) < 10:
+        said = re.sub(r"[^a-z ]", " ", speech.lower()).split()
+        if said[:len(il["words"].split())] == il["words"].split() and len(said) <= len(il["words"].split()) + 2:
+            # Twilio's normal result for the same "yes" the instant path already answered: don't answer twice.
+            raw.pop("instant_last", None)
+            await save_session(http, sb, call_sid, row)
+            return await cache.get_text(http, f"next:{call_sid}:{il['n']}") or twiml_listen(
+                row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), True)
+    if raw.get("instant"):
+        n = sum(1 for m in messages if m["role"] == "user")
+        if not await cache.claim(http, f"turn:{call_sid}:{n}"):
+            # The instant path already answered this turn and moved the call on: hand back its reply.
+            return await cache.get_text(http, f"next:{call_sid}:{n}") or twiml_gather(
+                "Sorry, could you say that once more?", row.get("lead_id") or lead_id, raw.get("lang", "en"),
+                raw.get("voice"), raw.get("stt"), True)
     messages.append({"role": "user", "text": speech.strip()})
     out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
     t_replied = time.perf_counter()
@@ -233,7 +322,7 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
         if not cache.fast_enough():
             await finish(http, call_sid, ended_reason="assistant-ended-call")
         return twiml_goodbye(reply, raw.get("voice"))   # goodbye plays immediately; analysis happens after hang-up
-    return twiml_gather(reply, row.get("lead_id") or lead_id, raw["lang"], raw.get("voice"))
+    return twiml_gather(reply, row.get("lead_id") or lead_id, raw["lang"], raw.get("voice"), raw.get("stt"), raw.get("instant", False))
 
 
 _SPOKEN = str.maketrans({"’": "'", "‘": "'", "“": "", "”": "", "‑": "-", "‐": "-",
@@ -414,6 +503,54 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     out["reply"] = reply   # never leave the lead in dead air: every turn ends with the next question
     print(f"[phone] {out.get('_usage')} latency_s={out.get('_latency_s')}", flush=True)
     return out
+
+
+# Short, complete answers that are safe to act on the moment they are heard. Anything longer waits
+# for the normal end of speech.
+INSTANT = re.compile(r"^(yes|yeah|yep|yes please|yes sure|sure|ok|okay|okay sure|go ahead|tell me|yes tell me|"
+                     r"haan|haan ji|ha|ji|ji haan|haanji|theek hai|bilkul|of course|absolutely|right|correct|"
+                     r"yes it is|yes yes|yeah sure|yes go ahead)$")
+
+
+async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: str) -> str:
+    """Twilio's live words while the lead speaks. A plain "yes" is answered NOW: the reply is prepared,
+    then the call is moved to it (Twilio REST), skipping the silence wait at the end of speech."""
+    words = re.sub(r"[^a-z ]", " ", (heard or "").lower()).split()
+    if not words or len(words) > 3 or not INSTANT.match(" ".join(words)):
+        return "ignored"
+    sb, groq = Supabase(http), Groq(http)
+    row, _ = await asyncio.gather(load_session(http, sb, call_sid), cache.get_quota(http))
+    if not row or not (row.get("raw") or {}).get("instant"):
+        return "ignored"
+    messages, raw = row.setdefault("messages", []), row.setdefault("raw", {})
+    n = sum(1 for m in messages if m["role"] == "user")
+    if not await cache.claim(http, f"turn:{call_sid}:{n}"):
+        return "taken"
+    t0 = time.perf_counter()
+    messages.append({"role": "user", "text": " ".join(words).capitalize() + "."})
+    raw["instant_last"] = {"n": n, "words": " ".join(words), "t": time.time()}
+    out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
+    reply = (out.get("reply") or "Sorry, could you say that once more?").strip()[:600]
+    end = bool(out.get("end"))
+    raw.update({"lang": out.get("lang", raw.get("lang", "en")), "silences": 0})
+    usage = dict(out.get("_usage") or {})
+    usage["t_ms"] = {"reply": round((time.perf_counter() - t0) * 1000), "turn": n + 1, "instant": True}
+    raw.setdefault("usage", []).append(usage)
+    messages.append({"role": "assistant", "text": reply})
+    lid = row.get("lead_id") or lead_id
+    if end:
+        raw["ended_reason"] = "assistant-ended-call"
+        xml = twiml_goodbye(reply, raw.get("voice"))
+    else:
+        xml = twiml_gather(reply, lid, raw["lang"], raw.get("voice"), raw.get("stt"), True)
+    await asyncio.gather(save_session(http, sb, call_sid, row), cache.put_text(http, f"next:{call_sid}:{n}", xml),
+                         cache.set_quota(http))
+    from .clients import Twilio
+    moved = await Twilio(http).redirect(call_sid, f"{settings().public_base_url}/api/phone/next?n={n}")
+    ms = round((time.perf_counter() - t0) * 1000)
+    print(f"[latency] instant call={call_sid[-6:]} heard={' '.join(words)!r} reply={usage['t_ms']['reply']}ms "
+          f"call_moved={ms}ms ok={moved}", flush=True)
+    return "answered" if moved else "redirect-failed"
 
 
 async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "customer-ended-call",

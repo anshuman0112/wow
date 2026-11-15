@@ -542,7 +542,9 @@ async def phone_start(request: Request, lead: str = Query(default="", max_length
                       http: httpx.AsyncClient = Depends(http_client)):
     form = await twilio_form(request)
     return _xml(await phone_agent.start(http, form.get("CallSid", ""), _uuid_or_blank(lead), form.get("To"),
-                                        callback=bool(cb)))
+                                        callback=bool(cb), stt=request.query_params.get("stt"),
+                                        voice_override=request.query_params.get("voice"),
+                                        instant=(request.query_params.get("instant") == "1") or None))
 
 
 @app.post("/api/phone/turn")
@@ -551,6 +553,24 @@ async def phone_turn(request: Request, lead: str = Query(default="", max_length=
     form = await twilio_form(request)
     return _xml(await phone_agent.turn(http, form.get("CallSid", ""), _uuid_or_blank(lead),
                                        form.get("SpeechResult", ""), bool(silence)))
+
+
+@app.post("/api/phone/partial")
+async def phone_partial(request: Request, lead: str = Query(default="", max_length=64),
+                        http: httpx.AsyncClient = Depends(http_client)):
+    """Live words while the lead is speaking (Gather partialResultCallback): a plain "yes" is answered at once."""
+    form = await twilio_form(request)
+    heard = form.get("UnstableSpeechResult") or form.get("StableSpeechResult") or ""
+    return {"result": await phone_agent.partial(http, form.get("CallSid", ""), _uuid_or_blank(lead), heard)}
+
+
+@app.post("/api/phone/next")
+async def phone_next(request: Request, n: int = 0, http: httpx.AsyncClient = Depends(http_client)):
+    """Where an instantly-answered call is moved to: the reply prepared by /api/phone/partial."""
+    from . import cache
+    form = await twilio_form(request)
+    xml = await cache.get_text(http, f"next:{form.get('CallSid', '')}:{n}")
+    return _xml(xml or '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>')
 
 
 @app.post("/api/phone/status")

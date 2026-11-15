@@ -73,7 +73,7 @@ async def get_lead(http: httpx.AsyncClient, lead_id: str) -> dict | None:
 
 
 FAQ_TTL = 60 * 60 * 24 * 30     # answers come from campaign facts; bump FAQ_VERSION when facts change
-FAQ_VERSION = "v2"
+FAQ_VERSION = "v3"
 
 
 async def get_faq(http: httpx.AsyncClient, intent: str, lang: str) -> str | None:
@@ -164,3 +164,30 @@ async def set_reply(http: httpx.AsyncClient, key: str, reply: str) -> None:
             await _cmd(http, "SET", key, reply, "EX", REPLY_TTL)
         except httpx.HTTPError:
             pass
+
+
+async def claim(http: httpx.AsyncClient, key: str, ttl: int = 300) -> bool:
+    """First caller wins (Redis SET NX): a turn is answered once, by the instant path OR the normal one."""
+    if not fast_enough():
+        return True
+    try:
+        return await _cmd(http, "SET", key, "1", "NX", "EX", ttl) == "OK"
+    except httpx.HTTPError:
+        return True
+
+
+async def put_text(http: httpx.AsyncClient, key: str, value: str, ttl: int = 300) -> None:
+    if fast_enough():
+        try:
+            await _cmd(http, "SET", key, value, "EX", ttl)
+        except httpx.HTTPError:
+            pass
+
+
+async def get_text(http: httpx.AsyncClient, key: str) -> str | None:
+    if not fast_enough():
+        return None
+    try:
+        return await _cmd(http, "GET", key)
+    except httpx.HTTPError:
+        return None
