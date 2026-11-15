@@ -27,16 +27,18 @@ const sections = [
     ['System Prompt (PDF) with pronunciation dictionary', 'docs/System_Prompt.pdf (npm run pdf)', 'done'],
   ]},
   { title: 'Bonus', items: [
-    ['Edge cases: irritated user, budget fit but not location, etc.', 'Campaign → Edge cases (12 handled) + live mood detection', 'done'],
-    ['Multilingual: English + Hindi', 'Deepgram nova-3 multi + GPT-4.1-mini + ElevenLabs Flash v2.5 (Riya)', 'build'],
-    ['Additional project details if asked (searched online)', 'Campaign → Fact sheet, items tagged "Web"', 'done'],
+    ['Edge cases: irritated user, budget fit but not location, etc.', 'Two-step persuasive counters (benefits, staged payments, plot loans, growth corridor, the small gap) + irritated/angry/busy handling + mood detection, in the prompt and the phone engine', 'done'],
+    ['Multilingual: English + Hindi', 'Switches to Hinglish when the lead does (browser: Deepgram multi + ElevenLabs; phone: Hinglish replies, FAQ answers and objections in both languages)', 'done'],
+    ['Additional project details if asked (searched online)', 'Fact sheet: 38 acres, ~207 plots, RERA, ~Rs 7,700/sq ft, schools, hospitals, distances (Campaign page, items tagged "Web")', 'done'],
   ]},
   { title: 'Extras beyond the brief', items: [
-    ['Every call, recording, transcript and summary stored', 'Verified: first call saved by n8n with recording, transcript, summary, cost', 'done'],
-    ['Automatic hot / warm / cold scoring and mood tracking', 'Vapi structured output → Supabase → Calls page (verified)', 'done'],
+    ['Real phone calls to leads', 'Leads → Call phone (free Twilio trial); reviewers verify their number on the Leads page first', 'done'],
+    ['Phone voice library', 'Phone voices page: 7 voices, play in the browser, choose the one calls use', 'done'],
+    ['Every call, transcript and summary stored', 'Python API (FastAPI) saves calls to Supabase with AI summary, interest and checkpoints', 'done'],
+    ['Automatic hot / warm / cold scoring and mood tracking', 'AI analysis after each call → Calls page', 'done'],
+    ['Zero-token answers for most-asked questions', 'Redis FAQ cache (price, amenities, schools, hospitals, location, RERA, payment...)', 'done'],
     ['Upload any lead file (CSV, Excel, JSON, SQL)', 'Leads → Import (auto column detection)', 'done'],
-    ['Automatic outbound dialing', 'n8n auto-dialer + Call now button · needs Twilio keys (npm run twilio)', 'build'],
-    ['Reusable for other businesses', 'All knowledge in campaign-data.js + n8n knowledge builder', 'done'],
+    ['Reusable for other businesses', 'All knowledge in campaign.json + knowledge builder API', 'done'],
   ]},
 ];
 
