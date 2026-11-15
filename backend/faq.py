@@ -21,8 +21,8 @@ INTENTS: dict[str, str] = {
     "price": r"\b(price|pricing|cost|rate|kitna|kitne|kitni|kimat|keemat|daam|starting|how much)\b",
     "size": r"\b(size|sizes|sq ?ft|square (feet|foot)|acre|acres|how big|kitna bada)\b",
     "amenities": r"\b(amenit\w*|facilit\w*|clubhouse|club house|pool|gym|sports|parks?|features)\b",
-    "schools": r"\b(schools?|colleges?|education|university)\b",
-    "hospitals": r"\b(hospitals?|clinics?|medical|healthcare|doctors?)\b",
+    "schools": r"\b(schools?|colleges?|education|university|near ?by|surrounding)\b",
+    "hospitals": r"\b(hospitals?|clinics?|medical|healthcare|doctors?|near ?by|surrounding)\b",
     "location": r"\b(where|location|located|kahan|address|airport|distance|how far|kitni door|connectivity)\b",
     # Possession, as people really ask it on calls ("position" = how phone recognition often hears "possession").
     "possession": r"\b(possession|position|handover\w*|handing over|hand(ed)? over|ready to move|completion|kab tak|"

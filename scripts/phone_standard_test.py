@@ -60,12 +60,14 @@ async def main() -> None:
 
         st, x, srv = await post("/api/phone/start?lead=", {"To": "+910000000000"})
         gather = re.search(r"<Gather[^>]*>", x).group(0)
-        check(st == 200 and 'speechTimeout="auto"' in gather and 'bargeIn="true"' in gather and "speechModel" not in gather
-              and "partialResultCallback" not in gather, "standard start: original settings (auto, barge-in on)", srv)
+        check(st == 200 and 'speechModel="deepgram_nova-3"' in gather and 'speechTimeout="1"' in gather
+              and 'bargeIn="true"' in gather and "partialResultCallback" not in gather,
+              "standard start: Nova-3, 1-second end of speech, barge-in on", srv)
         for text, must, label in [
             ("Yes.", "weekend home", "'Yes.' -> intent question"),
             ("I'm looking at it as a weekend home.", "<Say", "intent answered"),
             ("Yes. I'm", "<Say", "short/cut result is answered right away (no extra waiting)"),
+            ("Can you please tell me the nearby?", "hospital", "'the nearby?' -> schools + hospitals answer"),
             ("Can you tell me about the amenities?", "clubhouse", "amenities question -> amenities answer"),
             ("The EMI plan and the loan", "upfront", "EMI -> EMI answer"),
             ("What is the price?", "ninety-two point four lakh", "price -> price answer"),
@@ -82,7 +84,7 @@ async def main() -> None:
             row = await cache.get_session(h, SID) or {}
         msgs = row.get("messages") or []
         doubles = [i for i in range(1, len(msgs)) if msgs[i]["role"] == msgs[i - 1]["role"]]
-        check(not doubles and not row.get("raw", {}).get("pending"), "conversation clean: no double answers, nothing waiting",
+        check(bool(msgs) and not doubles and not row.get("raw", {}).get("pending"), "conversation clean: no double answers, nothing waiting",
               f"{len(msgs)} lines")
     print(f"\n{sum(results)}/{len(results)} checks passed")
     sys.exit(0 if all(results) else 1)

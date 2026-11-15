@@ -120,6 +120,9 @@ def greeting(name: str | None, callback: bool = False) -> str:
 STT_PRESETS = {
     "auto": 'speechTimeout="auto"',
     "nova3": 'speechModel="deepgram_nova-3" speechTimeout="1"',
+    # fast (STANDARD): Nova-3 ends the turn after 1 s of silence (vs ~1.5-2.5 s for Twilio's default model),
+    # barge-in stays ON and every result is answered right away (no extra waiting).
+    "fast": 'speechModel="deepgram_nova-3" speechTimeout="1"',
     "google": 'speechModel="googlev2_telephony_short" speechTimeout="1"',
     "conv": 'speechModel="experimental_conversations" speechTimeout="1"',
 }
@@ -127,13 +130,13 @@ STT_PRESETS = {
 
 def stt_preset() -> str:
     import os
-    v = os.environ.get("PHONE_STT", "auto").strip()
-    return v if v in STT_PRESETS else "auto"
+    v = os.environ.get("PHONE_STT", "fast").strip()
+    return v if v in STT_PRESETS else "fast"
 
 
 def stt_attrs(stt: str | None, lang: str) -> str:
     stt = stt if stt in STT_PRESETS else stt_preset()
-    if lang == "hi" and stt == "nova3":
+    if lang == "hi" and stt in ("nova3", "fast"):
         stt = "conv"   # Hindi/Hinglish: let Twilio pick a provider that handles hi-IN
     return STT_PRESETS[stt]
 
