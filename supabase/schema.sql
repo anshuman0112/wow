@@ -17,6 +17,7 @@ create table if not exists campaigns (
   goal            text,
   vapi_assistant_id text,
   facts_md        text,                              -- published fact sheet
+  phone_voice     text,                              -- chosen phone voice (dashboard → Voices)
   created_at      timestamptz not null default now()
 );
 
@@ -88,7 +89,7 @@ create or replace view leads_public as
 create or replace view calls_public as
   select id, vapi_call_id, lead_id, campaign_id, name, call_type, started_at, ended_at, duration_sec,
          ended_reason, recording_url, transcript, messages, summary, interest, intent, geography_fit,
-         budget_fit, timeline_fit, sentiment_start, sentiment_end, language, callback_time
+         budget_fit, timeline_fit, sentiment_start, sentiment_end, language, callback_time, cost_usd
   from calls;
 
 -- 5. Row Level Security: lock raw tables; expose only the views
@@ -112,3 +113,6 @@ insert into campaigns (id, name, client, agent_name, goal)
 values ('divyasree-wow', 'Whispers of the Wind', 'Divyasree Developers', 'Aanya',
         'Qualify the lead and book a follow-up call with a Property Expert')
 on conflict (id) do nothing;
+
+-- Upgrade for existing projects
+alter table campaigns add column if not exists phone_voice text;

@@ -1,7 +1,7 @@
 // Tiny helpers to describe n8n workflows in readable JS and export importable JSON.
 import { randomUUID } from 'node:crypto';
 
-export function workflow(name, nodes, edges, { active = false } = {}) {
+export function workflow(name, nodes, edges, { active = false, id } = {}) {
   // Auto-layout: place nodes left→right in the order given, branching rows by `row`.
   const col = {};
   nodes.forEach(n => {
@@ -16,7 +16,7 @@ export function workflow(name, nodes, edges, { active = false } = {}) {
     while (connections[from].main.length <= output) connections[from].main.push([]);
     connections[from].main[output].push({ node: to, type: 'main', index: 0 });
   }
-  return { name, nodes, connections, active, settings: { executionOrder: 'v1' }, pinData: {}, meta: { templateCredsSetupCompleted: true } };
+  return { ...(id ? { id } : {}), name, nodes, connections, active, settings: { executionOrder: 'v1' }, pinData: {}, meta: { templateCredsSetupCompleted: true } };
 }
 
 const base = (name, type, typeVersion, parameters, extra = {}) => ({ id: randomUUID(), name, type, typeVersion, parameters, ...extra });
@@ -50,11 +50,12 @@ export const respond = (name, body, col, row) => at(base(name, 'n8n-nodes-base.r
 }), col, row);
 
 // HTTP Request node. headers: {name: value}. body: n8n expression string producing JSON.
-export function http(name, { method = 'GET', url, headers = {}, body, binaryIn, fileOut = false, continueOnFail = false }, col, row) {
-  const p = { method, url, options: {} };
+export function http(name, { method = 'GET', url, headers = {}, body, form, binaryIn, fileOut = false, continueOnFail = false, timeoutMs }, col, row) {
+  const p = { method, url, options: timeoutMs ? { timeout: timeoutMs } : {} };
   const hs = Object.entries(headers);
   if (hs.length) { p.sendHeaders = true; p.headerParameters = { parameters: hs.map(([name, value]) => ({ name, value })) }; }
   if (body) { p.sendBody = true; p.specifyBody = 'json'; p.jsonBody = body; }
+  if (form) { p.sendBody = true; p.contentType = 'form-urlencoded'; p.bodyParameters = { parameters: Object.entries(form).map(([name, value]) => ({ name, value })) }; }
   if (binaryIn) { p.sendBody = true; p.contentType = 'binaryData'; p.inputDataFieldName = binaryIn; }
   if (fileOut) p.options.response = { response: { responseFormat: 'file' } };
   return at(base(name, 'n8n-nodes-base.httpRequest', 4.2, p, continueOnFail ? { onError: 'continueRegularOutput' } : {}), col, row);

@@ -1,8 +1,9 @@
 {
+  "id": "MYXhLGo8hP9VnaPJ",
   "name": "WF2 · Lead import (any file → leads)",
   "nodes": [
     {
-      "id": "410a78a5-4d63-4525-90e7-b2753182c9d9",
+      "id": "286c1847-9f6b-49c0-8873-19aca1d13b89",
       "name": "Mapping request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -14,14 +15,14 @@
           "allowedOrigins": "*"
         }
       },
-      "webhookId": "349c5ca3-d8fc-4380-ba0f-69a8644ea457",
+      "webhookId": "2d0cdc2a-7901-40bb-919c-0b514671d194",
       "position": [
         0,
         0
       ]
     },
     {
-      "id": "743fdee6-fe79-47ea-b3f1-2c7424a170b9",
+      "id": "e25487fe-d3de-447d-9c09-f4b5e8151ab5",
       "name": "Build mapping prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -34,7 +35,7 @@
       ]
     },
     {
-      "id": "34489468-3d27-47f1-b925-81970e9a08a8",
+      "id": "ae695d42-eacb-42b3-bc60-0a0fa081734a",
       "name": "Ask Groq for mapping",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -57,7 +58,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}"
+        "jsonBody": "={{ JSON.stringify({ model: 'openai/gpt-oss-120b', reasoning_effort: 'low', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}"
       },
       "onError": "continueRegularOutput",
       "position": [
@@ -66,7 +67,7 @@
       ]
     },
     {
-      "id": "17323bbd-e574-44ff-af04-40e44604b579",
+      "id": "fdd74248-e7cd-49b8-8a55-000719cf264f",
       "name": "Read mapping",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -79,7 +80,7 @@
       ]
     },
     {
-      "id": "af76c9c7-676f-4124-904c-044dbb98fbbe",
+      "id": "e1c50b44-e0ef-4bdf-8414-50f80fbb3e8f",
       "name": "Return mapping",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -103,7 +104,7 @@
       ]
     },
     {
-      "id": "6c0ce906-9122-47cd-a859-93765f922a87",
+      "id": "edee0570-13c1-4114-b97d-656699e00aa5",
       "name": "Import request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -115,14 +116,14 @@
           "allowedOrigins": "*"
         }
       },
-      "webhookId": "300633f4-0a4b-469c-8507-cd2fb565e550",
+      "webhookId": "eda39611-c211-4665-8bec-d32d765febd9",
       "position": [
         0,
         180
       ]
     },
     {
-      "id": "1d675a76-f737-4402-9435-a328a1f5e9a2",
+      "id": "512c474b-af5f-4eb1-bab5-a30d4be7f60f",
       "name": "Clean leads",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -135,7 +136,7 @@
       ]
     },
     {
-      "id": "8d186dbd-74d9-4dbd-bc8e-f9acdf3e581d",
+      "id": "eb2de889-3be6-495e-98cb-518f04a63f08",
       "name": "Save new leads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -175,7 +176,7 @@
       "alwaysOutputData": true
     },
     {
-      "id": "8dbf4e75-05b5-438e-933c-73f73293a696",
+      "id": "6f947593-033f-47c0-99be-4cfd88673d38",
       "name": "Count imported",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -188,7 +189,7 @@
       ]
     },
     {
-      "id": "9cf9dd31-42d2-46fb-bd98-7655780cd3d7",
+      "id": "35e322d4-12e8-47e4-9ddb-f50b4caf04b5",
       "name": "Return result",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,

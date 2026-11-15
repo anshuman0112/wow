@@ -59,7 +59,7 @@ function openDrawer(c) {
       <div class="drawer-head">
         <div style="flex:1;min-width:0">
           <h2>${esc(c.name)}</h2>
-          <div class="cell-sub">${fmtDate(c.started_at)} · ${fmtDur(c.duration_sec)} · ${esc(c.language || '')}</div>
+          <div class="cell-sub">${fmtDate(c.started_at)} · ${fmtDur(c.duration_sec)} · ${esc(c.language || '')}${c.cost_usd ? ` · $${Number(c.cost_usd).toFixed(2)}` : ''}</div>
         </div>
         ${interestBadge(c.interest)}
         <button class="btn btn-ghost" id="close" aria-label="Close">${icon('x')}</button>

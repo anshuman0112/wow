@@ -1,0 +1,15 @@
+# Only the dashboard (web/), the Python API (api/, backend/), the prompt template and
+# requirements.txt are deployed. Secrets come from Vercel environment variables, never files.
+.env
+.env.*
+!.env.example
+.venv
+node_modules
+n8n
+vapi/.state.json
+docs
+scripts
+supabase
+*.log
+__pycache__
+web/.vercel

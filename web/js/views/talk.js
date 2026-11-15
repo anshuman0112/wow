@@ -1,10 +1,14 @@
 // Live browser call with Aanya via the Vapi Web SDK (this is the shareable demo link).
 import { config, isLive } from '../config.js';
-import { getCalls } from '../store.js';
-import { esc, icon, toast } from '../ui.js';
+import { voices, voiceConfig } from '../campaign-data.js';
+import { getCalls, getLeads } from '../store.js';
+import { esc, icon, toast, statusBadge } from '../ui.js';
 
-export default async function talk(el) {
+export default async function talk(el, [leadId] = []) {
   const live = isLive.vapi();
+  // Opened from Leads → "Call now": personalise the call for that lead and link the result to it.
+  const lead = leadId ? (await getLeads().catch(() => [])).find(l => l.id === leadId) : null;
+  const firstName = (lead?.name || '').trim().split(/\s+/)[0] || '';
   let vapi = null, state = 'idle', muted = false, timer = null, seconds = 0, demoStop = false;
   const transcript = []; // { role, text, partial }
 
@@ -12,6 +16,15 @@ export default async function talk(el) {
     <div class="page-head">
       <div><h1>Talk to Aanya</h1><p class="muted">Divyasree consultant · Whispers of the Wind · English & Hindi</p></div>
     </div>
+    ${lead ? `<section class="card card-pad" style="margin-bottom:16px">
+      <div class="row">
+        <div class="avatar">${esc((lead.name || '?')[0])}</div>
+        <div style="flex:1;min-width:0"><b>Calling ${esc(lead.name || 'lead')}</b> ${statusBadge(lead.status)}
+          <div class="muted small">${esc(lead.phone || '')}${lead.location ? ' · ' + esc(lead.location) : ''}${lead.budget ? ' · budget ' + esc(lead.budget) : ''}</div></div>
+        <a class="btn btn-ghost small" href="#/talk">Not this lead</a>
+      </div>
+      <p class="muted small" style="margin-top:10px">Browser call: you play ${esc(firstName || 'the lead')}. Aanya greets them by name, and the result (summary, hot / warm / cold, callback) is saved to this lead automatically.</p>
+    </section>` : ''}
     ${live ? '' : `<div class="banner">${icon('info')}<span><b>Live calling is not connected yet.</b> Add the Vapi public key and assistant ID in <span class="mono">web/js/config.js</span>. Meanwhile you can replay a sample conversation (text only).</span></div>`}
     <div class="grid g-main">
       <section class="card">
@@ -21,8 +34,15 @@ export default async function talk(el) {
             <div class="status-line"><span class="pulse" id="pulse"></span><span id="status">Ready</span></div>
             <div class="muted small mono" id="clock" style="margin-top:4px">0:00</div>
           </div>
-          ${live ? `<label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Your first name (optional)
-            <input class="input" id="caller" maxlength="40" placeholder="e.g. Rahul" style="width:200px;text-align:center"></label>` : ''}
+          <div class="row" style="justify-content:center;gap:12px">
+            ${live ? `<label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Your first name (optional)
+              <input class="input" id="caller" maxlength="40" placeholder="e.g. Rahul" value="${esc(firstName)}" style="width:180px;text-align:center"></label>` : ''}
+            <label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Aanya's voice
+              <select class="input" id="voice" style="width:180px">
+                ${voices.map(v => `<option value="${v.id}">${esc(v.name)} — ${esc(v.languages)}</option>`).join('')}
+              </select></label>
+          </div>
+          <p class="muted small" id="voice-style" style="margin-top:-6px">${esc(voices[0].style)}</p>
           <div class="row" style="justify-content:center">
             <button class="btn btn-primary" id="start">${icon('phone')}${live ? 'Start call' : 'Replay sample call'}</button>
             <button class="btn" id="mute" hidden>${icon('micOff')}Mute</button>
@@ -96,7 +116,14 @@ export default async function talk(el) {
       });
       vapi.on('error', e => { console.error(e); toast('Call error — check the Vapi keys'); setState('ended'); });
       const name = (el.querySelector('#caller')?.value || '').trim();
-      await vapi.start(config.vapiAssistantId, name ? { variableValues: { name } } : undefined);
+      const voiceId = el.querySelector('#voice')?.value || voices[0].id;
+      const overrides = { voice: voiceConfig(voiceId), metadata: { campaign_id: 'divyasree-wow', voice: voiceId, ...(lead ? { lead_id: lead.id } : {}) } };
+      const vars = {};
+      if (name) vars.name = name;
+      if (lead?.location) vars.location = lead.location;
+      if (lead) vars.lead_id = lead.id;
+      if (Object.keys(vars).length) overrides.variableValues = vars;
+      await vapi.start(config.vapiAssistantId, overrides);
     } catch (e) {
       console.error(e); toast('Could not start the call: ' + (e.message || e)); setState('idle');
     }
@@ -123,6 +150,7 @@ export default async function talk(el) {
     if (!demoStop) setState('ended');
   }
 
+  $('voice').onchange = e => { $('voice-style').textContent = voices.find(v => v.id === e.target.value)?.style || ''; };
   $('start').onclick = () => { transcript.length = 0; $('tx').innerHTML = ''; live ? startLive() : startDemo(); };
   $('stop').onclick = () => { demoStop = true; vapi?.stop(); setState('ended'); };
   $('mute').onclick = () => { muted = !muted; vapi?.setMuted(muted); $('mute').innerHTML = `${icon(muted ? 'mic' : 'micOff')}${muted ? 'Unmute' : 'Mute'}`; };

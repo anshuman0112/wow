@@ -1,11 +1,14 @@
-import { getLeads, addLeads, mode } from '../store.js';
-import { readFile, guessMapping, aiMapping, cleanRows } from '../importer.js';
+import { getLeads, addLeads, callNow, mode } from '../store.js';
+import { phoneCalling } from '../config.js';
+import { readFile, guessMapping, aiMapping, cleanRows, normalisePhone } from '../importer.js';
 import { esc, icon, fmtDate, interestBadge, statusBadge, demoBanner, toast } from '../ui.js';
+import { verifyPanel, bindVerifyPanel, stopPolling } from './verify-panel.js';
 
 const FIELD_OPTS = ['name', 'phone', 'email', 'location', 'budget', 'notes', 'extra'];
 
 export default async function leadsView(el) {
   let leads = await getLeads();
+  const realCalls = await phoneCalling();   // true when the Python backend has a phone line (Twilio bridge / Vapi number)
   let filter = 'all', q = '';
   let pending = null; // { file, rows, headers, mapping }
 
@@ -20,6 +23,7 @@ export default async function leadsView(el) {
         <div><h1>Leads</h1><p class="muted">${leads.length} people · new leads are called automatically between 10 AM and 7 PM IST</p></div>
       </div>
 
+      ${realCalls && mode() !== 'demo' ? verifyPanel() : ''}
       <section class="card" style="margin-bottom:16px">
         <div class="card-head"><div><h2>Import leads</h2><p class="muted small">CSV, Excel (.xlsx / .xls), JSON or SQL INSERT dumps — columns are detected automatically</p></div></div>
         <div class="card-pad">
@@ -29,7 +33,15 @@ export default async function leadsView(el) {
               <div style="margin-top:8px;font-weight:600">Drop a file here or click to browse</div>
               <div class="muted small" style="margin-top:2px">e.g. a sheet with "Customer Name", "Mob No.", "City" works as-is</div>
               <input type="file" id="file" accept=".csv,.xlsx,.xls,.json,.sql,.tsv,.txt,.ods" hidden>
-            </label>`}
+            </label>
+            <form class="row" id="add-form" style="margin-top:14px">
+              <span class="muted small" style="width:100%">Or add one lead by hand (handy for testing on your own phone):</span>
+              <input class="input" name="name" placeholder="Name" maxlength="80" style="flex:1;min-width:140px">
+              <input class="input" name="phone" placeholder="Phone, e.g. 98765 43210" required style="flex:1;min-width:160px">
+              <input class="input" name="location" placeholder="City (optional)" maxlength="80" style="flex:1;min-width:140px">
+              <button class="btn btn-primary" type="submit">Add lead</button>
+              <span class="small" id="add-err" style="color:var(--bad);width:100%"></span>
+            </form>`}
         </div>
       </section>
 
@@ -44,11 +56,11 @@ export default async function leadsView(el) {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Budget</th><th>Status</th><th>Interest</th><th>Callback</th><th>Source</th></tr></thead>
+            <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Budget</th><th>Status</th><th>Interest</th><th>Callback</th><th>Source</th><th></th></tr></thead>
             <tbody>
               ${shown.map(l => `
                 <tr>
-                  <td><div class="cell-title">${esc(l.name || '—')}</div><div class="cell-sub">${esc(l.id || '')}</div></td>
+                  <td><div class="cell-title">${esc(l.name || '—')}</div>${l.attempts ? `<div class="cell-sub">${l.attempts} call attempt${l.attempts > 1 ? 's' : ''}</div>` : ''}</td>
                   <td class="mono">${esc(l.phone)}</td>
                   <td>${esc(l.location || '—')}</td>
                   <td>${esc(l.budget || '—')}</td>
@@ -56,7 +68,13 @@ export default async function leadsView(el) {
                   <td>${interestBadge(l.interest)}</td>
                   <td>${esc(l.callback_time || '—')}</td>
                   <td class="cell-sub">${esc(l.source || '—')}<br>${fmtDate(l.created_at)}</td>
-                </tr>`).join('') || `<tr><td colspan="8" class="empty">No leads match.</td></tr>`}
+                  <td>${l.status === 'do_not_call'
+                    ? '<span class="faint small">Not allowed</span>'
+                    : `<div class="row" style="gap:6px;flex-wrap:nowrap">
+                        <button class="btn small" data-call="${esc(l.id)}" title="${realCalls ? 'Ring this lead\'s real phone' : 'Start a browser call with Aanya, personalised for this lead'}" ${realCalls && (mode() === 'demo' || l.status === 'calling') ? 'disabled' : ''}>${icon('phone')}${realCalls ? (l.status === 'calling' ? 'Calling…' : 'Call phone') : 'Call now'}</button>
+                        ${realCalls ? `<a class="btn btn-ghost small" href="#/talk/${esc(l.id)}" title="Talk to Aanya in the browser as this lead">Web call</a>` : ''}
+                      </div>`}</td>
+                </tr>`).join('') || `<tr><td colspan="9" class="empty">No leads match.</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -68,6 +86,35 @@ export default async function leadsView(el) {
     el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
     const qi = el.querySelector('#q');
     qi.oninput = () => { q = qi.value.toLowerCase(); const pos = qi.selectionStart; draw(); const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); };
+
+    el.querySelectorAll('[data-call]').forEach(b => b.onclick = async () => {
+      const lead = leads.find(l => l.id === b.dataset.call);
+      // No paid phone line: open a browser call with Aanya, personalised for this lead.
+      if (!realCalls) { location.hash = `#/talk/${lead.id}`; return; }
+      if (!confirmCall(lead)) return;
+      b.disabled = true; b.textContent = 'Starting…';
+      try { await callNow(lead.id); toast(`Calling ${lead.name || 'lead'} — their phone will ring in a few seconds`); lead.status = 'calling'; }
+      catch (e) { toast(e.message); }
+      draw();
+    });
+
+    const form = el.querySelector('#add-form');
+    if (form) form.onsubmit = async e => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(form));
+      const phone = normalisePhone(f.phone);
+      const err = el.querySelector('#add-err');
+      if (!phone) { err.textContent = 'Enter a valid phone number (10 digits, or with country code like +91…).'; return; }
+      err.textContent = '';
+      try {
+        const n = await addLeads([{ name: f.name?.trim() || null, phone, location: f.location?.trim() || null, source: 'added by hand', extra: {} }]);
+        leads = await getLeads();
+        toast(n ? 'Lead added' : 'That phone number is already in your leads');
+        draw();
+      } catch (ex) { err.textContent = ex.message; }
+    };
+
+    bindVerifyPanel(el, draw, async () => { leads = await getLeads(); });
 
     const drop = el.querySelector('#drop');
     if (drop) {
@@ -104,6 +151,12 @@ export default async function leadsView(el) {
   };
 
   draw();
+  return () => stopPolling();
+}
+
+// Real calls ring a real phone — always confirm first.
+function confirmCall(lead) {
+  return window.confirm(`Call ${lead?.name || 'this lead'} at ${lead?.phone} now?\n\nThis rings a real phone (free Twilio trial: verified numbers only).`);
 }
 
 function mappingPanel(p) {

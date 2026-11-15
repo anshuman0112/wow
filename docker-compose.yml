@@ -10,6 +10,9 @@ services:
     restart: unless-stopped
     ports:
       - "5678:5678"
+    dns:                        # fast public DNS (some hotspots/routers resolve supabase.co very slowly)
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - path: .env
         required: false

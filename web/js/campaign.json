@@ -1,0 +1,546 @@
+{
+  "campaign": {
+    "id": "divyasree-wow",
+    "name": "Whispers of the Wind",
+    "client": "Divyasree Developers",
+    "status": "active",
+    "goal": "Qualify the lead and book a follow-up call with a Property Expert",
+    "persona": {
+      "name": "Aanya",
+      "role": "Divyasree consultant",
+      "voice": "ElevenLabs Flash v2.5 · Riya (default), Sia, Anika",
+      "languages": [
+        "English",
+        "Hindi",
+        "Hinglish"
+      ],
+      "tone": "Premium, conversational, non-intrusive",
+      "maxReply": "2 short sentences, one question per turn"
+    },
+    "stack": [
+      {
+        "part": "Call platform",
+        "tool": "Vapi"
+      },
+      {
+        "part": "Speech to text",
+        "tool": "Deepgram nova-3 (multi: EN + HI)"
+      },
+      {
+        "part": "LLM (live call)",
+        "tool": "OpenAI GPT-4.1-mini via Vapi credits"
+      },
+      {
+        "part": "LLM (backend jobs)",
+        "tool": "Groq · gpt-oss-120b (free tier)"
+      },
+      {
+        "part": "Text to speech",
+        "tool": "ElevenLabs Flash v2.5"
+      },
+      {
+        "part": "Backend",
+        "tool": "Python · FastAPI on Vercel (serverless)"
+      },
+      {
+        "part": "Database",
+        "tool": "Supabase (Postgres + Storage)"
+      },
+      {
+        "part": "Phone line",
+        "tool": "Twilio (trial bridge) → Vapi SIP"
+      }
+    ]
+  },
+  "pinnedVoices": [
+    {
+      "id": "wlmwDR77ptH6bKHZui0l",
+      "name": "Riya",
+      "style": "Indian English + Hindi · built for AI calling",
+      "languages": "EN · HI · Hinglish"
+    },
+    {
+      "id": "oO7sLA3dWfQXsKeSAjpA",
+      "name": "Sia",
+      "style": "Warm, consultative sales professional",
+      "languages": "EN (multilingual model)"
+    },
+    {
+      "id": "90ipbRoKi4CpHXvKVtl0",
+      "name": "Anika",
+      "style": "Calm customer-care voice",
+      "languages": "EN (multilingual model)"
+    }
+  ],
+  "voiceSettings": {
+    "provider": "11labs",
+    "model": "eleven_flash_v2_5",
+    "stability": 0.5,
+    "similarityBoost": 0.75
+  },
+  "sayAs": [
+    [
+      "Divyasree",
+      "Divya-shree"
+    ],
+    [
+      "DivyaSree",
+      "Divya-shree"
+    ],
+    [
+      "Devanahalli",
+      "Dayva-nahalli"
+    ],
+    [
+      "Doddaballapura",
+      "Dodda-balla-pura"
+    ],
+    [
+      "lakh",
+      "laakh"
+    ],
+    [
+      "Lakh",
+      "Laakh"
+    ]
+  ],
+  "flow": [
+    {
+      "key": "intro",
+      "title": "Introduction",
+      "pdf": true,
+      "detail": "Greets as a Divyasree consultant, names the project and location, and always asks permission to speak.",
+      "line": "Hello, am I speaking with {{name}}? This is Aanya, a consultant from Div-yaa-shree Developers, calling about Whispers of the Wind, our villa plot community near Nun-dhee Hills in North Bengaluru. Is this a good time for two minutes?"
+    },
+    {
+      "key": "intent",
+      "title": "Intent",
+      "pdf": true,
+      "checkpoint": true,
+      "detail": "Self-use vs. investment.",
+      "line": "Are you looking at this more as a weekend home for yourself, or as an investment?"
+    },
+    {
+      "key": "geography",
+      "title": "Geography",
+      "pdf": true,
+      "checkpoint": true,
+      "detail": "Comfort with the Nandi Hills / Devanahalli corridor.",
+      "line": "Are you comfortable with the Nandi Hills and Devanahalli side, close to the airport corridor?"
+    },
+    {
+      "key": "budget",
+      "title": "Budget",
+      "pdf": true,
+      "checkpoint": true,
+      "detail": "Fitment check for the ₹92.4 lakh+ starting price.",
+      "line": "Plots start at 92.4 laakh, inclusive of taxes. Would that range work for you?"
+    },
+    {
+      "key": "timeline",
+      "title": "Timeline",
+      "pdf": true,
+      "checkpoint": true,
+      "detail": "Comfort with phased delivery / ongoing project status (possession December 2029).",
+      "line": "The project is being delivered in phases, with possession planned for December 2029. Is that timeline comfortable?"
+    },
+    {
+      "key": "pitch",
+      "title": "The pitch",
+      "pdf": true,
+      "detail": "High-end, aspirational description of the \"Private Valley\" lifestyle — clubhouse, nature and community.",
+      "line": "Picture a private valley where 74% of the land is open green space, with eco-parks, views of Nandi Hills and a 20,000 square-foot clubhouse, shared with a like-minded community."
+    },
+    {
+      "key": "cta",
+      "title": "Call to action",
+      "pdf": true,
+      "detail": "Request a follow-up call with a Property Expert.",
+      "line": "May I set up a short call with our Property Expert? What day and time suits you?"
+    }
+  ],
+  "facts": [
+    {
+      "group": "Project",
+      "items": [
+        {
+          "k": "Project",
+          "v": "Whispers of the Wind (WOW)",
+          "src": "pdf"
+        },
+        {
+          "k": "Developer",
+          "v": "Divyasree Developers",
+          "src": "pdf"
+        },
+        {
+          "k": "Product",
+          "v": "Premium \"Private Valley\" villa plots",
+          "src": "pdf"
+        },
+        {
+          "k": "Plot sizes",
+          "v": "1,200 – 3,199 sq.ft.",
+          "src": "pdf"
+        },
+        {
+          "k": "Land / plots",
+          "v": "~38 acres, ~207 plots, low-density gated layout",
+          "src": "web"
+        },
+        {
+          "k": "RERA",
+          "v": "Karnataka RERA registered; listed online as PRM/KA/RERA/1250/301/PR/070525/007718 (the Property Expert shares the documents)",
+          "src": "web"
+        }
+      ]
+    },
+    {
+      "group": "Pricing & timeline",
+      "items": [
+        {
+          "k": "Price range",
+          "v": "₹92.4 lakh – ₹2.46 crore (inclusive of taxes)",
+          "src": "pdf"
+        },
+        {
+          "k": "Rate",
+          "v": "about ₹7,700 per sq.ft. as listed online (exact plot price from the Property Expert)",
+          "src": "web"
+        },
+        {
+          "k": "Possession",
+          "v": "December 2029 (phased delivery)",
+          "src": "pdf"
+        },
+        {
+          "k": "Payment plan",
+          "v": "Development-linked stages — exact schedule, loans and EMI from the Property Expert",
+          "src": "web"
+        }
+      ]
+    },
+    {
+      "group": "Location",
+      "items": [
+        {
+          "k": "Location",
+          "v": "Nandi Valley, near Nandi Hills, North Bengaluru",
+          "src": "pdf"
+        },
+        {
+          "k": "Address",
+          "v": "Heggadihalli Village, Doddaballapura, Bengaluru Rural",
+          "src": "web"
+        },
+        {
+          "k": "Airport (KIA)",
+          "v": "~30–35 min",
+          "src": "web"
+        },
+        {
+          "k": "Nandi Hills foothills",
+          "v": "~15 min",
+          "src": "web"
+        },
+        {
+          "k": "STRR corridor",
+          "v": "~10 min",
+          "src": "web"
+        },
+        {
+          "k": "Yelahanka",
+          "v": "~35 min",
+          "src": "web"
+        }
+      ]
+    },
+    {
+      "group": "Lifestyle (USP)",
+      "items": [
+        {
+          "k": "Open space",
+          "v": "74% open spaces",
+          "src": "pdf"
+        },
+        {
+          "k": "Clubhouse",
+          "v": "20,000 sq.ft.",
+          "src": "pdf"
+        },
+        {
+          "k": "Nature",
+          "v": "Eco-parks and scenic hill views",
+          "src": "pdf"
+        },
+        {
+          "k": "Amenities",
+          "v": "Pool, gym, tennis / basketball / pickleball, jogging & cycling tracks, themed parks, eco trails",
+          "src": "web"
+        },
+        {
+          "k": "Infrastructure",
+          "v": "Rainwater harvesting, STP, underground cabling, 24×7 security",
+          "src": "web"
+        }
+      ]
+    },
+    {
+      "group": "Nearby",
+      "items": [
+        {
+          "k": "Education",
+          "v": "GITAM Doddaballapura, Nagarjuna College of Engineering, Stonehill International School corridor",
+          "src": "web"
+        },
+        {
+          "k": "Healthcare",
+          "v": "Columbia Asia / Manipal network, Doddaballapura Government Hospital",
+          "src": "web"
+        }
+      ]
+    },
+    {
+      "group": "Target buyers",
+      "items": [
+        {
+          "k": "Who",
+          "v": "HNIs, CXOs and NRIs",
+          "src": "pdf"
+        },
+        {
+          "k": "Why",
+          "v": "Luxury weekend homes or high-yield investments",
+          "src": "pdf"
+        }
+      ]
+    }
+  ],
+  "pronunciation": [
+    {
+      "term": "Divyasree",
+      "say": "Div-yaa-shree",
+      "from": "PDF"
+    },
+    {
+      "term": "Nandi",
+      "say": "Nun-dhee",
+      "from": "PDF"
+    },
+    {
+      "term": "Lakh",
+      "say": "Laakh — one syllable, long aa sound, rhymes with bark",
+      "from": "PDF"
+    },
+    {
+      "term": "Crore",
+      "say": "Kror — one syllable, rhymes with more",
+      "from": "PDF"
+    },
+    {
+      "term": "Devanahalli",
+      "say": "Day-vuh-nuh-hul-lee",
+      "from": "added"
+    },
+    {
+      "term": "Doddaballapura",
+      "say": "Dod-duh-bul-luh-poo-ruh",
+      "from": "added"
+    },
+    {
+      "term": "Bengaluru",
+      "say": "Beng-guh-loo-roo",
+      "from": "added"
+    },
+    {
+      "term": "₹92.4 lakh",
+      "say": "ninety-two point four laakh",
+      "from": "added"
+    },
+    {
+      "term": "₹2.46 Cr",
+      "say": "two point four six kror",
+      "from": "added"
+    }
+  ],
+  "edgeCases": [
+    {
+      "name": "Busy right now",
+      "mood": "calm",
+      "reply": "Completely understood. When would be a better time for a two-minute call?"
+    },
+    {
+      "name": "Irritated user",
+      "mood": "irritated",
+      "reply": "I'm sorry for the interruption. I'll keep it very short — or I can have our expert call you at a better time?"
+    },
+    {
+      "name": "Angry / \"stop calling\"",
+      "mood": "angry",
+      "reply": "I sincerely apologise. I'll make sure you're not contacted again. Have a good day."
+    },
+    {
+      "name": "Budget fits, location does not",
+      "mood": "hesitant",
+      "reply": "That's fair, and it's exactly why most buyers see it as a weekend escape rather than a daily commute: about thirty minutes from the airport, ten from the STRR. With that corridor growing fast, early buyers get strong future exposure. If it's still far, our expert can show how buyers hold it purely as an investment."
+    },
+    {
+      "name": "Location fits, budget does not",
+      "mood": "hesitant",
+      "reply": "Many of our buyers started with a similar budget. Payments are staged with construction until December 2029, so it isn't all upfront, and our expert can arrange plot-loan options to keep the monthly outgo light. If they hesitate again: the gap is small, and a no-obligation ten-minute call shows the real numbers. Never quote an EMI, discount or guaranteed return."
+    },
+    {
+      "name": "Neither fits",
+      "mood": "calm",
+      "reply": "Thank you for being upfront. I won't take more of your time — have a lovely day."
+    },
+    {
+      "name": "Already bought elsewhere",
+      "mood": "calm",
+      "reply": "Congratulations! If you ever consider a second investment, we would be happy to help."
+    },
+    {
+      "name": "Asks something not in the facts",
+      "mood": "calm",
+      "reply": "Good question — I don't want to give you incomplete information, so our Property Expert will confirm that."
+    },
+    {
+      "name": "\"Are you a robot?\"",
+      "mood": "calm",
+      "reply": "Yes, I'm Divyasree's AI assistant. I can answer basics and set up a call with a human expert."
+    },
+    {
+      "name": "Wants a human",
+      "mood": "calm",
+      "reply": "Of course. What time works for our Property Expert to call you?"
+    },
+    {
+      "name": "Silence",
+      "mood": "calm",
+      "reply": "Are you still there? … I will try you another time. Thank you!"
+    },
+    {
+      "name": "Speaks Hindi",
+      "mood": "calm",
+      "reply": "Bilkul! Plots 92.4 laakh se shuru hote hain, taxes included. Kya yeh aapke budget mein theek hai?"
+    }
+  ],
+  "faq": {
+    "price": {
+      "en": "Plots range from ninety-two point four lakh to two point four six crore, inclusive of taxes.",
+      "hi": "Plots ninety-two point four lakh se two point four six crore tak hain, taxes included."
+    },
+    "size": {
+      "en": "The project spreads over about thirty-eight acres with around two hundred and seven plots, from twelve hundred to about thirty-two hundred square feet, in a low-density gated layout.",
+      "hi": "Project lagbhag thirty-eight acres mein hai, around two hundred seven plots ke saath, twelve hundred se lagbhag thirty-two hundred square feet tak, low-density gated layout mein."
+    },
+    "amenities": {
+      "en": "There is a twenty thousand square foot clubhouse, a pool and gym, tennis, basketball and pickleball courts, jogging and cycling tracks, eco-parks and trails, and seventy-four percent open space.",
+      "hi": "Twenty thousand square foot clubhouse hai, pool aur gym, tennis, basketball aur pickleball courts, jogging aur cycling tracks, eco-parks, aur seventy-four percent open space."
+    },
+    "schools": {
+      "en": "Nearby education options include GITAM Doddaballapura, Nagarjuna College of Engineering and the Stonehill International School corridor.",
+      "hi": "Paas mein GITAM Doddaballapura, Nagarjuna College of Engineering aur Stonehill International School corridor hai."
+    },
+    "hospitals": {
+      "en": "For healthcare, the Columbia Asia Manipal network and Doddaballapura Government Hospital are nearby.",
+      "hi": "Healthcare ke liye Columbia Asia Manipal network aur Doddaballapura Government Hospital paas mein hain."
+    },
+    "location": {
+      "en": "It is in Nandi Valley near Nandi Hills, at Heggadihalli village in Doddaballapura, about thirty to thirty-five minutes from the airport.",
+      "hi": "Yeh Nandi Valley mein hai, Nandi Hills ke paas, Doddaballapura ke Heggadihalli village mein, airport se lagbhag thirty-five minute."
+    },
+    "possession": {
+      "en": "Possession is planned for December 2029, with phased delivery.",
+      "hi": "Possession December 2029 tak planned hai, phased delivery ke saath."
+    },
+    "rera": {
+      "en": "It is registered with Karnataka RERA, and our Property Expert will share the registration number and documents.",
+      "hi": "Yeh Karnataka RERA registered hai, registration number aur documents hamare Property Expert share karenge."
+    },
+    "payment": {
+      "en": "Payments are linked to development stages, and our Property Expert will walk you through the exact payment, loan and EMI options.",
+      "hi": "Payments development stages se linked hain, exact payment, loan aur EMI options hamare Property Expert batayenge."
+    },
+    "rate": {
+      "en": "As listed online, it works out to roughly seventy-seven hundred rupees per square foot; our Property Expert will confirm the exact plot price.",
+      "hi": "Online listing ke hisaab se lagbhag seventy-seven hundred rupees per square foot padta hai; exact plot price hamare Property Expert confirm karenge."
+    }
+  },
+  "nextQuestion": {
+    "intent": {
+      "en": "Are you looking at this more as a weekend home or as an investment?",
+      "hi": "Aap ise weekend home ke liye dekh rahe hain ya investment ke liye?"
+    },
+    "geography": {
+      "en": "Are you comfortable with the Nandi Hills and Devanahalli side, near the airport corridor?",
+      "hi": "Kya Nandi Hills aur Devanahalli ka area, airport ke paas, aapke liye theek hai?"
+    },
+    "budget": {
+      "en": "Would a range starting at ninety-two point four lakh work for you?",
+      "hi": "Kya ninety-two point four lakh se shuru hone wali range aapke liye theek hai?"
+    },
+    "timeline": {
+      "en": "Possession is planned for December 2029. Is that timeline comfortable?",
+      "hi": "Possession December 2029 tak hai. Kya yeh timeline theek hai?"
+    },
+    "pitch": {
+      "en": "Imagine your own private valley at the foot of Nandi Hills: seventy-four percent open green space, eco-parks, a twenty thousand square foot clubhouse, and a like-minded community of homeowners. What day and time would suit a short call with our Property Expert?",
+      "hi": "Sochiye, Nandi Hills ke paas aapki apni private valley: seventy-four percent open green space, eco-parks, twenty thousand square foot ka clubhouse, aur like-minded community. Hamare Property Expert ke saath short call ke liye kaunsa din aur time theek rahega?"
+    },
+    "callback": {
+      "en": "Is there anything else you would like to know before our expert calls you?",
+      "hi": "Expert ki call se pehle aur kuch jaanna chahenge?"
+    }
+  },
+  "phoneVoices": {
+    "default": "Google.en-IN-Chirp3-HD-Aoede",
+    "library": [
+      {
+        "id": "Google.en-IN-Chirp3-HD-Aoede",
+        "label": "Aoede",
+        "style": "Warm, polished Indian-English female (premium HD)"
+      },
+      {
+        "id": "Google.en-IN-Chirp3-HD-Kore",
+        "label": "Kore",
+        "style": "Calm, confident Indian-English female (premium HD)"
+      },
+      {
+        "id": "Google.en-IN-Chirp3-HD-Leda",
+        "label": "Leda",
+        "style": "Bright, friendly Indian-English female (premium HD)"
+      },
+      {
+        "id": "Google.en-IN-Chirp3-HD-Zephyr",
+        "label": "Zephyr",
+        "style": "Soft, gentle Indian-English female (premium HD)"
+      },
+      {
+        "id": "Polly.Kajal-Generative",
+        "label": "Kajal Generative",
+        "style": "Natural Indian-English female (Amazon generative)"
+      },
+      {
+        "id": "Polly.Kajal-Neural",
+        "label": "Kajal Neural",
+        "style": "Previous voice (Amazon neural)"
+      },
+      {
+        "id": "Google.en-IN-Chirp3-HD-Charon",
+        "label": "Charon",
+        "style": "Deep, assured Indian-English male (premium HD)"
+      }
+    ]
+  },
+  "phoneSayAs": [
+    [
+      "DivyaSree",
+      "Divya shree"
+    ],
+    [
+      "Divyasree",
+      "Divya shree"
+    ]
+  ]
+}

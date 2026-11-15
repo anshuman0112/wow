@@ -9,6 +9,8 @@ export default async function overview(el) {
   const callbacks = calls.filter(c => c.callback_time).length;
   const pending = leads.filter(l => ['new', 'queued', 'no_answer'].includes(l.status)).length;
   const total = Math.max(1, hot + warm + cold);
+  const spent = calls.reduce((s, c) => s + Number(c.cost_usd || 0), 0);
+  const totalMin = calls.reduce((s, c) => s + Number(c.duration_sec || 0), 0) / 60;
 
   el.innerHTML = `
     ${demoBanner(mode())}
@@ -28,6 +30,7 @@ export default async function overview(el) {
       ${stat('Calls made', calls.length, `Avg ${fmtDur(avg)} per call`)}
       ${stat('Hot leads', hot, `${Math.round((hot / Math.max(1, calls.length)) * 100)}% of calls`)}
       ${stat('Expert callbacks', callbacks, 'Booked by the agent')}
+      ${stat('Credits used', '$' + spent.toFixed(2), calls.length ? `~$${(spent / Math.max(1, totalMin)).toFixed(2)} per minute` : 'Vapi call cost')}
     </div>
 
     <div class="grid g-main" style="margin-top:16px">

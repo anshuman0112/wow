@@ -1,4 +1,5 @@
-import { campaign, flow, facts, pronunciation, edgeCases } from '../campaign-data.js';
+import { campaign, flow, facts, pronunciation, edgeCases, voices } from '../campaign-data.js';
+import { syncedAt } from '../voices.generated.js';
 import { esc, moodBadge } from '../ui.js';
 
 export default async function campaignView(el) {
@@ -31,6 +32,21 @@ export default async function campaignView(el) {
         </dl>
       </section>
     </div>
+
+    <section class="card" style="margin-top:16px">
+      <div class="card-head"><div><h2>Voices</h2><p class="muted small">ElevenLabs Flash v2.5 — every voice can speak English, Hindi and Hinglish. Pick one on the Talk page. ${syncedAt ? `Library synced ${esc(new Date(syncedAt).toLocaleString('en-IN'))}.` : 'Run <span class="mono">npm run voices</span> to add your ElevenLabs library.'}</p></div></div>
+      <div class="list">
+        ${voices.map((v, i) => `
+          <div class="list-item">
+            <div class="avatar">${esc(v.name[0])}</div>
+            <div style="flex:1;min-width:0"><div class="row"><b>${esc(v.name)}</b>${i === 0 ? '<span class="badge b-brand">Default</span>' : ''}${v.pinned ? '<span class="badge b-gold">Your pick</span>' : `<span class="badge">${esc(v.category || 'library')}</span>`}</div>
+              <div class="muted small">${esc(v.style)} · ${esc(v.languages)}</div></div>
+            ${v.previewUrl
+              ? `<audio controls preload="none" src="${esc(v.previewUrl)}" style="height:32px;max-width:220px"></audio>`
+              : `<a class="btn btn-ghost small" href="https://elevenlabs.io/voices/${esc(v.id)}" target="_blank" rel="noopener">Preview ↗</a>`}
+          </div>`).join('')}
+      </div>
+    </section>
 
     <section class="card" style="margin-top:16px">
       <div class="card-head"><div><h2>Conversation flow</h2><p class="muted small">From the assignment brief · numbered steps in green are the 4 qualification checkpoints · any step the lead already answered is skipped</p></div></div>

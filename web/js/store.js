@@ -48,13 +48,22 @@ export async function addLeads(rows) {
     }
     return n;
   }
-  // The browser never writes to the database directly: n8n (WF2) saves leads with the service key.
-  if (!isLive.n8n()) throw new Error('Set n8nBaseUrl in config.js to import leads into Supabase.');
-  const res = await fetch(`${config.n8nBaseUrl}/lead-import`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' }, body: JSON.stringify({ leads: rows }),
+  // The browser never writes to the database directly: the Python API saves leads with the service key.
+  const res = await fetch(`${config.apiBaseUrl}/leads/import`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leads: rows }),
   });
   if (!res.ok) throw new Error(`Lead import failed (${res.status})`);
   return (await res.json()).imported ?? rows.length;
+}
+
+// Ask the Python API to ring one lead's real phone (Twilio bridge or Vapi number).
+export async function callNow(leadId) {
+  if (mode() === 'demo') throw new Error('Demo mode: connect Supabase to make real calls.');
+  const res = await fetch(`${config.apiBaseUrl}/calls/now`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lead_id: leadId }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Could not start the call (${res.status})`);
 }
 
 function normaliseCall(c) {

@@ -1,8 +1,9 @@
 {
+  "id": "cHYHmxqY3LTVWwa5",
   "name": "WF1 · Knowledge builder (document → fact sheet)",
   "nodes": [
     {
-      "id": "ea779ad8-885d-4634-9ebf-78ad78934c3f",
+      "id": "cc800b05-9a91-4974-af11-7b299164e8ce",
       "name": "Knowledge request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -14,14 +15,14 @@
           "allowedOrigins": "*"
         }
       },
-      "webhookId": "12e370ee-cbca-43fd-8682-6430668ad359",
+      "webhookId": "75c1d13d-7f65-4b34-9e5e-c777e2a54b37",
       "position": [
         0,
         0
       ]
     },
     {
-      "id": "6f67dfa1-a783-4d48-b9a3-cc4a9e97be2b",
+      "id": "b999c437-5c1e-405b-b457-d14dd486e9cb",
       "name": "Build extraction prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -34,7 +35,7 @@
       ]
     },
     {
-      "id": "760fd724-e00f-4b41-9a1f-a1ca79e2d7e4",
+      "id": "4a5a5f07-2eb0-44d0-86c7-849ed0970835",
       "name": "Ask Groq to extract facts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -57,7 +58,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}"
+        "jsonBody": "={{ JSON.stringify({ model: 'openai/gpt-oss-120b', reasoning_effort: 'low', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}"
       },
       "position": [
         520,
@@ -65,7 +66,7 @@
       ]
     },
     {
-      "id": "b76c5384-977f-4c3b-ae03-95e81d929e36",
+      "id": "e2af8c8f-e8ec-40f7-a7d7-9a2498fc587a",
       "name": "Format fact sheet",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -78,7 +79,7 @@
       ]
     },
     {
-      "id": "fb2df949-d968-465a-a9c6-266f4aac61db",
+      "id": "0022b3ff-cd27-41c6-a619-e7a93ea740bc",
       "name": "Save to campaign",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -117,7 +118,7 @@
       ]
     },
     {
-      "id": "541c9f5c-48a3-4554-bb46-3e2102d03b3d",
+      "id": "42b262b4-5119-4c29-83d8-6252af1d6da3",
       "name": "Return fact sheet",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,

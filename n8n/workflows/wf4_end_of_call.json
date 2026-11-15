@@ -1,8 +1,9 @@
 {
+  "id": "iCvnbx7Iy6Ix63Va",
   "name": "WF4 · End-of-call save (Vapi → Supabase)",
   "nodes": [
     {
-      "id": "d3e48058-06c2-4382-a858-72c74baaf6f2",
+      "id": "43796407-254b-4fb2-9d36-6e2118150a0a",
       "name": "Vapi events",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -14,14 +15,14 @@
           "allowedOrigins": "*"
         }
       },
-      "webhookId": "c4393e75-3712-4702-a506-ab39fd220d21",
+      "webhookId": "c5ee7c4e-f7b4-4ce3-831a-d310ced368ed",
       "position": [
         0,
         0
       ]
     },
     {
-      "id": "de0d43c8-917b-400e-8422-da7feadf4758",
+      "id": "2ec384d9-e9f2-4480-925a-af43557427a9",
       "name": "Is end-of-call report?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -34,7 +35,7 @@
           },
           "conditions": [
             {
-              "id": "d3bc18f0-899b-4002-9e0e-58820e4d15ef",
+              "id": "b96d6075-f08b-4cad-8c44-09e6100f99db",
               "leftValue": "={{ $json.body?.message?.type === 'end-of-call-report' }}",
               "rightValue": "",
               "operator": {
@@ -54,7 +55,7 @@
       ]
     },
     {
-      "id": "2e1d243c-5510-4786-b09f-3e4ccb2591f2",
+      "id": "120ff029-2b53-4fd6-b748-c558cb70504f",
       "name": "Wait for AI analysis",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
@@ -63,14 +64,14 @@
         "amount": 8,
         "unit": "seconds"
       },
-      "webhookId": "266267a1-8aa5-4a21-a593-b73beef29395",
+      "webhookId": "dfc136e4-7283-4cc7-a92f-7235ff375a59",
       "position": [
         520,
         0
       ]
     },
     {
-      "id": "bdb07473-0edd-41d1-a517-44b20fca85e8",
+      "id": "c1e188b5-914b-4f2e-8f13-f898845f28b7",
       "name": "Fetch full call from Vapi",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -99,12 +100,12 @@
       ]
     },
     {
-      "id": "b842ae63-9c21-444b-a02c-c84ca037f7c3",
+      "id": "86f3d6d7-0f14-4b7b-bd9d-c5ab339bd2f4",
       "name": "Build call row",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "// Combine the webhook report with the freshly fetched call (which has the AI analysis attached).\nconst msg = $('Vapi events').first().json.body.message;\nconst fetched = $input.first().json || {};\nconst call = fetched.id ? fetched : (msg.call || {});\nconst art = { ...(msg.artifact || {}), ...(fetched.artifact || {}) };\n\n// AI analysis (Vapi Structured Output named \"Lead Qualification\")\nconst outputs = Object.values(art.structuredOutputs || {});\nconst q = (outputs.find(o => o && o.name === 'Lead Qualification') || {}).result || {};\n\n// Conversation: keep only Aanya (\"bot\") and the lead (\"user\")\nconst messages = (art.messages || msg.messages || [])\n  .filter(m => ['bot', 'assistant', 'user'].includes(m.role))\n  .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.message || m.content || '', t: m.secondsFromStart }));\nconst aiLines = messages.filter(m => m.role === 'assistant').map(m => m.text).join('\\n');\nconst transcript = art.transcript || messages.map(m => (m.role === 'user' ? 'Lead: ' : 'Aanya: ') + m.text).join('\\n');\n\nconst recordingUrl = art.recordingUrl || art.recording?.mono?.combinedUrl || art.stereoRecordingUrl || msg.recordingUrl || null;\nconst startedAt = msg.startedAt || call.startedAt || null;\nconst endedAt = msg.endedAt || call.endedAt || null;\nconst duration = msg.durationSeconds ?? (startedAt && endedAt ? (new Date(endedAt) - new Date(startedAt)) / 1000 : null);\nconst vars = call.assistantOverrides?.variableValues || {};\nconst leadId = call.metadata?.lead_id || null;\nconst ext = (recordingUrl || '').split('?')[0].split('.').pop() || 'wav';\nconst id = call.id || msg.call?.id;\n\nconst row = {\n  vapi_call_id: id,\n  lead_id: /^[0-9a-f-]{36}$/i.test(leadId || '') ? leadId : null,\n  name: call.customer?.name || vars.name || null,\n  phone: call.customer?.number || null,\n  call_type: call.type || null,\n  started_at: startedAt,\n  ended_at: endedAt,\n  duration_sec: duration,\n  ended_reason: msg.endedReason || call.endedReason || null,\n  cost_usd: msg.cost ?? call.cost ?? null,\n  recording_url: recordingUrl,\n  transcript,\n  ai_lines: aiLines,\n  messages,\n  summary: q.summary || msg.analysis?.summary || art.summary || null,\n  interest: ['hot', 'warm', 'cold'].includes(q.interest) ? q.interest : null,\n  intent: q.intent || null,\n  geography_fit: q.geography_fit || null,\n  budget_fit: q.budget_fit || null,\n  timeline_fit: q.timeline_fit || null,\n  sentiment_start: q.sentiment_start || null,\n  sentiment_end: q.sentiment_end || null,\n  language: q.language || null,\n  callback_time: q.callback_time || null,\n  do_not_call: q.do_not_call === true,\n  analysis: q,\n  raw: msg,\n};\nreturn [{ json: { row, lead_id: row.lead_id, phone: row.phone, recordingUrl, storagePath: id + '.' + ext } }];"
+        "jsCode": "// Combine the webhook report with the freshly fetched call (which has the AI analysis attached).\nconst msg = $('Vapi events').first().json.body.message;\nconst fetched = $input.first().json || {};\nconst call = fetched.id ? fetched : (msg.call || {});\nconst art = { ...(msg.artifact || {}), ...(fetched.artifact || {}) };\n\n// AI analysis (Vapi Structured Output named \"Lead Qualification\")\nconst outputs = Object.values(art.structuredOutputs || {});\nconst q = (outputs.find(o => o && o.name === 'Lead Qualification') || {}).result || {};\n\n// Conversation: keep only Aanya (\"bot\") and the lead (\"user\")\nconst messages = (art.messages || msg.messages || [])\n  .filter(m => ['bot', 'assistant', 'user'].includes(m.role))\n  .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.message || m.content || '', t: m.secondsFromStart }));\nconst aiLines = messages.filter(m => m.role === 'assistant').map(m => m.text).join('\\n');\nconst transcript = art.transcript || messages.map(m => (m.role === 'user' ? 'Lead: ' : 'Aanya: ') + m.text).join('\\n');\n\n// Vapi recordings live in a private bucket; only the presigned links (valid ~30 min) can be downloaded.\nconst recordingUrl = art.presignedMonoUrl || art.presignedStereoUrl || art.recordingUrl || art.recording?.mono?.combinedUrl || msg.recordingUrl || null;\nconst startedAt = msg.startedAt || call.startedAt || null;\nconst endedAt = msg.endedAt || call.endedAt || null;\nconst duration = msg.durationSeconds ?? (startedAt && endedAt ? (new Date(endedAt) - new Date(startedAt)) / 1000 : null);\nconst vars = call.assistantOverrides?.variableValues || {};\n// Phone calls carry the lead in call.metadata; browser calls started from a lead carry it in the overrides.\nconst leadId = call.metadata?.lead_id || call.assistantOverrides?.metadata?.lead_id || vars.lead_id || null;\nconst ext = (recordingUrl || '').split('?')[0].split('.').pop() || 'wav';\nconst id = call.id || msg.call?.id;\n\nconst row = {\n  vapi_call_id: id,\n  lead_id: /^[0-9a-f-]{36}$/i.test(leadId || '') ? leadId : null,\n  name: call.customer?.name || vars.name || null,\n  phone: call.customer?.number || null,\n  call_type: call.type || null,\n  started_at: startedAt,\n  ended_at: endedAt,\n  duration_sec: duration,\n  ended_reason: msg.endedReason || call.endedReason || null,\n  cost_usd: msg.cost ?? call.cost ?? null,\n  recording_url: null,            // set below to a long-lived Supabase playback link\n  transcript,\n  ai_lines: aiLines,\n  messages,\n  summary: q.summary || msg.analysis?.summary || art.summary || null,\n  interest: ['hot', 'warm', 'cold'].includes(q.interest) ? q.interest : null,\n  intent: q.intent || null,\n  geography_fit: q.geography_fit || null,\n  budget_fit: q.budget_fit || null,\n  timeline_fit: q.timeline_fit || null,\n  sentiment_start: q.sentiment_start || null,\n  sentiment_end: q.sentiment_end || null,\n  language: q.language || null,\n  callback_time: q.callback_time || null,\n  do_not_call: q.do_not_call === true,\n  analysis: q,\n  raw: msg,\n};\n// Never overwrite saved data with blanks (e.g. if the Vapi fetch failed): drop empty fields.\nconst isEmpty = v => v === null || v === undefined || v === '' ||\n  (Array.isArray(v) && v.length === 0) || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);\nfor (const k of Object.keys(row)) if (isEmpty(row[k])) delete row[k];\nif (!fetched.id && !msg.artifact) delete row.do_not_call;\nreturn [{ json: { row, lead_id: row.lead_id || null, phone: row.phone || null, recordingUrl, storagePath: id + '.' + ext } }];"
       },
       "position": [
         1040,
@@ -112,7 +113,7 @@
       ]
     },
     {
-      "id": "7caf4d39-f568-4515-b5b8-729c96759eb8",
+      "id": "cf700e67-6f85-49f6-b5fd-7b0adbc734d0",
       "name": "Save call to Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -151,7 +152,7 @@
       ]
     },
     {
-      "id": "922cb0ad-5f4e-48df-bff2-bd0fb650f80b",
+      "id": "17712d7d-0a43-40ee-8b41-13d27e1151bf",
       "name": "Prepare lead update",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -164,7 +165,7 @@
       ]
     },
     {
-      "id": "2b6aa7f1-83ee-4556-b437-8504010b4b9e",
+      "id": "7adda232-a242-4445-a8aa-6e538feea4ed",
       "name": "Update lead",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -203,7 +204,7 @@
       ]
     },
     {
-      "id": "fdb87d31-2d53-49b2-a048-1d35846e6c12",
+      "id": "d5b27f88-ce16-49c7-ba3e-02c21586a034",
       "name": "Has recording?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -216,7 +217,7 @@
           },
           "conditions": [
             {
-              "id": "6ff7087d-9617-42ed-bf4e-01c6437b05ef",
+              "id": "c4a295c9-7a59-4987-b26f-21e68e5478f4",
               "leftValue": "={{ !!$('Build call row').first().json.recordingUrl }}",
               "rightValue": "",
               "operator": {
@@ -236,7 +237,7 @@
       ]
     },
     {
-      "id": "01d5421b-8c74-4d03-a467-1578580b88d6",
+      "id": "a9d0c186-fc1a-4205-8bf0-50886ea2d55d",
       "name": "Download recording",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -244,6 +245,7 @@
         "method": "GET",
         "url": "={{ $('Build call row').first().json.recordingUrl }}",
         "options": {
+          "timeout": 180000,
           "response": {
             "response": {
               "responseFormat": "file"
@@ -258,14 +260,16 @@
       ]
     },
     {
-      "id": "d86dee96-64dc-4d44-8bc4-3887f87dbce2",
+      "id": "a9a5d597-245d-463e-855c-d77cbb740ce6",
       "name": "Upload to Storage",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "parameters": {
         "method": "POST",
         "url": "={{ $env.SUPABASE_URL }}/storage/v1/object/recordings/{{ $('Build call row').first().json.storagePath }}",
-        "options": {},
+        "options": {
+          "timeout": 180000
+        },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -294,7 +298,43 @@
       ]
     },
     {
-      "id": "7805f63c-abeb-4069-ada2-2368c1da1ee5",
+      "id": "5fc7e61c-2da3-4040-aca1-822a41681c51",
+      "name": "Create playback link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/storage/v1/object/sign/recordings/{{ $('Build call row').first().json.storagePath }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ expiresIn: 31536000 }) }}"
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        2340,
+        180
+      ]
+    },
+    {
+      "id": "ebbcf10b-a3fe-4ab9-9f2b-4de628375ef1",
       "name": "Save storage path",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -325,16 +365,16 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ storage_path: 'recordings/' + $('Build call row').first().json.storagePath }) }}"
+        "jsonBody": "={{ JSON.stringify({ storage_path: 'recordings/' + $('Build call row').first().json.storagePath, recording_url: $json.signedURL ? $env.SUPABASE_URL + '/storage/v1' + $json.signedURL : null }) }}"
       },
       "onError": "continueRegularOutput",
       "position": [
-        2340,
+        2600,
         180
       ]
     },
     {
-      "id": "9ef6dcf4-bb83-4e7b-9e35-842085b569cf",
+      "id": "61717d0a-3b4d-40b3-8d9c-e409f1e98a87",
       "name": "Is hot lead?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -347,7 +387,7 @@
           },
           "conditions": [
             {
-              "id": "8b05d0c1-3fa0-4673-b9fb-7245d6969564",
+              "id": "3987e3c1-9364-4294-a72e-ea1ae2701a31",
               "leftValue": "={{ $('Build call row').first().json.row.interest === 'hot' && !!$env.TELEGRAM_BOT_TOKEN }}",
               "rightValue": "",
               "operator": {
@@ -367,7 +407,7 @@
       ]
     },
     {
-      "id": "4db49d6e-eb32-4fbc-b8f3-e27b384a3893",
+      "id": "a8077e97-5e22-4783-b045-b7ac49bfdd19",
       "name": "Send Telegram alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -506,6 +546,17 @@
       ]
     },
     "Upload to Storage": {
+      "main": [
+        [
+          {
+            "node": "Create playback link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create playback link": {
       "main": [
         [
           {

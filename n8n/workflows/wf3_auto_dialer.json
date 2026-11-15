@@ -1,8 +1,9 @@
 {
-  "name": "WF3 · Auto-dialer (Vapi + Twilio)",
+  "id": "8VpOqJuNDWQenrOf",
+  "name": "WF3 · Auto-dialer + Call now (Vapi + Twilio)",
   "nodes": [
     {
-      "id": "d7328101-f898-4f87-bd45-f18dc0e88161",
+      "id": "f20753c9-694b-4e32-871b-cc5330c212a2",
       "name": "Every 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -22,12 +23,119 @@
       ]
     },
     {
-      "id": "ee63f9cf-a121-403e-a3f0-d3935802eb6c",
+      "id": "4e415d26-a33a-4ad3-bee1-ba43ebab112d",
+      "name": "TwiML for Twilio",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "twiml-aanya",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "webhookId": "a8ae1880-6450-4d5d-a362-b058c8f6f713",
+      "position": [
+        0,
+        360
+      ]
+    },
+    {
+      "id": "03596e0e-373b-445d-8100-50d33ec4e80d",
+      "name": "Reply: connect to Aanya",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Dial><Sip>' + $env.VAPI_SIP_URI + '?X-Lead-Id=' + ($json.query?.lead || '') + '</Sip></Dial></Response>' }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "position": [
+        260,
+        360
+      ]
+    },
+    {
+      "id": "5ee465cb-7ae4-4929-b3aa-e70ed914be1e",
+      "name": "Call now request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "call-now",
+        "responseMode": "onReceived",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "webhookId": "b0727fcf-4cb1-4b46-bb1a-512650c26f28",
+      "position": [
+        0,
+        180
+      ]
+    },
+    {
+      "id": "297979b7-49b3-4823-bd79-083d39a32e20",
+      "name": "Check lead id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const id = ($input.first().json.body || {}).lead_id || '';\nif (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Send {\"lead_id\": \"<uuid>\"}');\nif (!$env.VAPI_PHONE_NUMBER_ID && !($env.TWILIO_ACCOUNT_SID && $env.TWILIO_AUTH_TOKEN && $env.VAPI_SIP_URI)) throw new Error('No phone line: add Twilio keys to .env (free bridge) or run npm run twilio');\nreturn [{ json: { id } }];"
+      },
+      "position": [
+        260,
+        180
+      ]
+    },
+    {
+      "id": "1cc43274-2770-4aae-8d72-6e8aea305ebc",
+      "name": "Get that lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?select=id,name,phone,location,attempts,status&id=eq.{{ $json.id }}&status=neq.do_not_call",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "position": [
+        520,
+        180
+      ]
+    },
+    {
+      "id": "5033f9a4-37e1-441c-8cc7-1f444a922171",
       "name": "Calling hours check",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }).format(new Date()));\nif (hour < 10 || hour >= 19) return [];               // only call 10:00–18:59 IST\nif (!$env.VAPI_ASSISTANT_ID || !$env.VAPI_PHONE_NUMBER_ID) {\n  throw new Error('Set VAPI_ASSISTANT_ID and VAPI_PHONE_NUMBER_ID in .env, then restart n8n.');\n}\nreturn [{ json: { hour } }];"
+        "jsCode": "const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }).format(new Date()));\nif (hour < 10 || hour >= 19) return [];               // only call 10:00–18:59 IST\nif (!$env.VAPI_PHONE_NUMBER_ID && !($env.TWILIO_ACCOUNT_SID && $env.TWILIO_AUTH_TOKEN && $env.VAPI_SIP_URI)) {\n  throw new Error('No phone line: add Twilio keys to .env (free bridge) or run npm run twilio.');\n}\nreturn [{ json: { hour } }];"
       },
       "position": [
         260,
@@ -35,7 +143,7 @@
       ]
     },
     {
-      "id": "094c9808-adb9-49fe-ae33-51905d1582a5",
+      "id": "95b70b42-c023-41eb-88aa-2bf7720a55d6",
       "name": "Get leads to call",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -67,7 +175,7 @@
       ]
     },
     {
-      "id": "2fd52860-05ad-4448-b488-db5bf3d1598c",
+      "id": "675b1eeb-b5bb-46c2-b6fe-3c38554dd73b",
       "name": "Mark as calling",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -106,7 +214,83 @@
       ]
     },
     {
-      "id": "2355a1fb-d9f2-49a1-8ffc-901f466c6b96",
+      "id": "a3bc6bb9-e08c-4721-b873-280a8104e4f0",
+      "name": "Use free Twilio bridge?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "fb5c22e2-110d-4415-ba63-1d869aacf59e",
+              "leftValue": "={{ !$env.VAPI_PHONE_NUMBER_ID }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1040,
+        180
+      ]
+    },
+    {
+      "id": "e0cb85bf-e4ea-4d1b-b8b6-439fd02221e9",
+      "name": "Ring via Twilio bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $env.TWILIO_ACCOUNT_SID }}/Calls.json",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Basic ' + ($env.TWILIO_ACCOUNT_SID + ':' + $env.TWILIO_AUTH_TOKEN).base64Encode() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $env.TWILIO_PHONE_NUMBER }}"
+            },
+            {
+              "name": "Url",
+              "value": "={{ $env.N8N_PUBLIC_URL + '/webhook/twiml-aanya?lead=' + $json.id }}"
+            }
+          ]
+        }
+      },
+      "onError": "continueRegularOutput",
+      "position": [
+        1300,
+        180
+      ]
+    },
+    {
+      "id": "c087c460-38b0-4c41-9687-4ff0efc0d259",
       "name": "Start Vapi phone call",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -133,12 +317,12 @@
       },
       "onError": "continueRegularOutput",
       "position": [
-        1040,
+        1300,
         0
       ]
     },
     {
-      "id": "411079f7-b7cf-40f7-b8aa-20e2ec1c5f24",
+      "id": "6fb5d9d7-3f88-4bb4-9171-1b4c8e91a719",
       "name": "Call failed to start?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -151,7 +335,7 @@
           },
           "conditions": [
             {
-              "id": "7c96ca71-0c9e-40be-8bbf-a5a377dbd976",
+              "id": "a02ff84b-0a63-4658-9717-5710ebd8f5fc",
               "leftValue": "={{ !!$json.error }}",
               "rightValue": "",
               "operator": {
@@ -166,12 +350,12 @@
         "options": {}
       },
       "position": [
-        1300,
+        1560,
         0
       ]
     },
     {
-      "id": "aa1abc25-d5a3-405c-a927-d3b48bf97d9c",
+      "id": "4617be6b-e899-437b-b86c-7e42d2229de9",
       "name": "Mark as no answer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -205,7 +389,7 @@
         "jsonBody": "={{ JSON.stringify({ status: 'no_answer' }) }}"
       },
       "position": [
-        1560,
+        1820,
         0
       ]
     }
@@ -244,11 +428,84 @@
         ]
       ]
     },
+    "TwiML for Twilio": {
+      "main": [
+        [
+          {
+            "node": "Reply: connect to Aanya",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call now request": {
+      "main": [
+        [
+          {
+            "node": "Check lead id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check lead id": {
+      "main": [
+        [
+          {
+            "node": "Get that lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get that lead": {
+      "main": [
+        [
+          {
+            "node": "Mark as calling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Mark as calling": {
       "main": [
         [
           {
+            "node": "Use free Twilio bridge?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use free Twilio bridge?": {
+      "main": [
+        [
+          {
+            "node": "Ring via Twilio bridge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Start Vapi phone call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ring via Twilio bridge": {
+      "main": [
+        [
+          {
+            "node": "Call failed to start?",
             "type": "main",
             "index": 0
           }

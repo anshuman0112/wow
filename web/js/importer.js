@@ -1,5 +1,5 @@
 // Lead import agent (browser side): any file → rows → mapped columns → clean leads.
-// Mapping uses fast keyword rules; when n8n is configured the AI mapper (WF2) is used instead.
+// Mapping uses fast keyword rules; the Python API's AI mapper (Groq) is tried first.
 import { config, isLive } from './config.js';
 
 const FIELDS = {
@@ -30,10 +30,10 @@ export function guessMapping(headers) {
 }
 
 export async function aiMapping(headers, sample) {
-  if (!isLive.n8n()) return null;
+  if (!isLive.api()) return null;
   try {
-    const r = await fetch(`${config.n8nBaseUrl}/lead-map`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+    const r = await fetch(`${config.apiBaseUrl}/leads/map`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ headers, sample: sample.slice(0, 5) }),
     });
     return r.ok ? (await r.json()).mapping : null;

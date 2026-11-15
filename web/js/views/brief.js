@@ -15,28 +15,28 @@ const sections = [
     ['CTA: follow-up call with a Property Expert', 'Flow step "Call to action"; callback time saved per lead', 'done'],
   ]},
   { title: '2. Technical requirements', items: [
-    ['Affirmations ("Understood", "Perfect")', 'System prompt style rules', 'build'],
+    ['Affirmations ("Understood", "Perfect")', 'System prompt rule 4 · heard in the first live call ("Wonderful", "Understood")', 'done'],
     ['No re-asking if the user gave info early', 'System prompt checkpoint tracker; full history sent every turn', 'build'],
     ['Pronunciation guide: Divyasree, Nandi, Lakh, Crore', 'Campaign → Pronunciation guide (in system prompt)', 'done'],
     ['Tone: premium, conversational, non-intrusive', 'Persona + max 2-sentence replies', 'done'],
-    ['Holds a 2–3 minute conversation', 'Flow sized for ~2.5 minutes', 'build'],
+    ['Holds a 2–3 minute conversation', 'First live call: 2 min 28 s, ended by Aanya after booking the callback', 'done'],
   ]},
   { title: '3. Deliverables', items: [
-    ['Demo link — shareable working bot', 'Talk to Aanya page, deployed on Vercel', 'build'],
-    ['Or recorded audio — at least 5 conversation flows', '6 scenarios planned (see Calls page samples)', 'todo'],
-    ['System Prompt (PDF) with pronunciation dictionary', 'Written: docs/system_prompt.md · PDF export pending', 'build'],
+    ['Demo link — shareable working bot', 'https://vaani-divyasree.vercel.app → Talk to Aanya', 'done'],
+    ['Or recorded audio — at least 5 conversation flows', '6 scenarios to record on the live bot (Calls page keeps each recording)', 'todo'],
+    ['System Prompt (PDF) with pronunciation dictionary', 'docs/System_Prompt.pdf (npm run pdf)', 'done'],
   ]},
   { title: 'Bonus', items: [
     ['Edge cases: irritated user, budget fit but not location, etc.', 'Campaign → Edge cases (12 handled) + live mood detection', 'done'],
-    ['Multilingual: English + Hindi', 'Deepgram multi + Llama 3.3 70B + ElevenLabs multilingual', 'build'],
+    ['Multilingual: English + Hindi', 'Deepgram nova-3 multi + GPT-4.1-mini + ElevenLabs Flash v2.5 (Riya)', 'build'],
     ['Additional project details if asked (searched online)', 'Campaign → Fact sheet, items tagged "Web"', 'done'],
   ]},
   { title: 'Extras beyond the brief', items: [
-    ['Every call, recording, transcript and summary stored', 'Supabase (calls table + recordings bucket) via n8n', 'build'],
-    ['Automatic hot / warm / cold scoring and mood tracking', 'Vapi analysis → Calls page', 'build'],
+    ['Every call, recording, transcript and summary stored', 'Verified: first call saved by n8n with recording, transcript, summary, cost', 'done'],
+    ['Automatic hot / warm / cold scoring and mood tracking', 'Vapi structured output → Supabase → Calls page (verified)', 'done'],
     ['Upload any lead file (CSV, Excel, JSON, SQL)', 'Leads → Import (auto column detection)', 'done'],
-    ['Automatic outbound dialing', 'n8n auto-dialer + Twilio', 'build'],
-    ['Reusable for other businesses', 'Campaign-based design', 'build'],
+    ['Automatic outbound dialing', 'n8n auto-dialer + Call now button · needs Twilio keys (npm run twilio)', 'build'],
+    ['Reusable for other businesses', 'All knowledge in campaign-data.js + n8n knowledge builder', 'done'],
   ]},
 ];
 

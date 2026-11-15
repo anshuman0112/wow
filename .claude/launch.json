@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "vaani-web",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5173", "--directory", "web"],
+      "runtimeExecutable": "C:\\Users\\ANSHUMAN MOHANTY\\tools\\node-v22.14.0-win-x64\\node.exe",
+      "runtimeArgs": ["scripts/dev_server.js"],
       "port": 5173
     }
   ]

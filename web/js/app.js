@@ -2,6 +2,7 @@ import { icon } from './ui.js';
 import { mode } from './store.js';
 import overview from './views/overview.js';
 import talk from './views/talk.js';
+import voicesView from './views/voices.js';
 import leads from './views/leads.js';
 import calls from './views/calls.js';
 import campaignView from './views/campaign.js';
@@ -11,6 +12,7 @@ import integrations from './views/integrations.js';
 const routes = [
   { path: 'overview', label: 'Overview', icon: 'home', view: overview },
   { path: 'talk', label: 'Talk to Aanya', icon: 'mic', view: talk },
+  { path: 'voices', label: 'Phone voices', icon: 'play', view: voicesView },
   { path: 'leads', label: 'Leads', icon: 'users', view: leads },
   { path: 'calls', label: 'Calls', icon: 'history', view: calls },
   { section: 'Setup' },

@@ -8,8 +8,8 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { facts, pronunciation } from '../web/js/campaign-data.js';
-import { buildAssistant, leadAnalysisOutput } from '../vapi/assistant.js';
+import { facts, pronunciation, pinnedVoices as voices } from '../web/js/campaign-data.js';
+import { buildAssistant, leadAnalysisOutput, parseLlm } from '../vapi/assistant.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dryRun = process.argv.includes('--dry-run');
@@ -57,7 +57,7 @@ async function main() {
   if (dryRun) return;
 
   const env = await loadEnv();
-  for (const k of ['VAPI_PRIVATE_KEY', 'ELEVENLABS_VOICE_ID']) {
+  for (const k of ['VAPI_PRIVATE_KEY']) {
     if (!env[k]) throw new Error(`Missing ${k} in .env — copy .env.example to .env and fill it in.`);
   }
   const stateFile = path.join(root, 'vapi/.state.json');
@@ -76,10 +76,12 @@ async function main() {
   // Assistant
   const assistant = buildAssistant({
     systemPrompt,
-    voiceId: env.ELEVENLABS_VOICE_ID,
+    voiceId: env.ELEVENLABS_VOICE_ID || voices[0].id,
     serverUrl: env.N8N_VAPI_WEBHOOK_URL,
     structuredOutputId: state.structuredOutputId,
+    llm: parseLlm(env.VAPI_LLM || undefined),
   });
+  console.log(`  brain: ${assistant.model.provider}/${assistant.model.model} · voice: ${assistant.voice.voiceId}`);
   if (state.assistantId) {
     await vapi('PATCH', `/assistant/${state.assistantId}`, env.VAPI_PRIVATE_KEY, assistant);
     console.log('✓ Updated assistant', state.assistantId);
@@ -90,8 +92,17 @@ async function main() {
   }
   await writeFile(stateFile, JSON.stringify(state, null, 2));
 
-  console.log(`\nNext: put these in web/js/config.js\n  vapiPublicKey:   '${env.VAPI_PUBLIC_KEY || '<your Vapi public key>'}'\n  vapiAssistantId: '${state.assistantId}'`);
+  // Write the public key + assistant ID into the web app so "Talk to Aanya" goes live.
+  const cfgPath = path.join(root, 'web/js/config.js');
+  let cfg = await readFile(cfgPath, 'utf8');
+  cfg = cfg.replace(/vapiAssistantId: '[^']*'/, `vapiAssistantId: '${state.assistantId}'`);
+  if (env.VAPI_PUBLIC_KEY) cfg = cfg.replace(/vapiPublicKey: '[^']*'/, `vapiPublicKey: '${env.VAPI_PUBLIC_KEY}'`);
+  await writeFile(cfgPath, cfg);
+  console.log(`✓ web/js/config.js updated${env.VAPI_PUBLIC_KEY ? '' : ' (add VAPI_PUBLIC_KEY to .env and re-run to enable browser calls)'}`);
   if (!env.N8N_VAPI_WEBHOOK_URL) console.log('\n! N8N_VAPI_WEBHOOK_URL is empty — calls work, but nothing is saved to Supabase until n8n is connected. Re-run after setting it.');
 }
 
-main().catch(e => { console.error('✗', e.message); process.exit(1); });
+// Run only when executed directly (not when another script imports renderPrompt).
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => { console.error('✗', e.message); process.exit(1); });
+}

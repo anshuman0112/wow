@@ -5,9 +5,17 @@
   "type": "module",
   "description": "Vaani: outbound AI voice agent (Aanya) for Divyasree Whispers of the Wind",
   "scripts": {
+    "db:schema": "node scripts/apply_schema.js",
     "prompt": "node scripts/sync_assistant.js --dry-run",
     "sync": "node scripts/sync_assistant.js",
-    "dev": "python -m http.server 5173 --directory web",
+    "voices": "node --env-file=.env scripts/sync_voices.js",
+    "pdf": "node scripts/export_prompt_pdf.js",
+    "tunnel": "node scripts/tunnel.js",
+    "twilio": "node scripts/setup_twilio.js",
+    "call": "node scripts/call_phone.js",
+    "deploy": "cd web && npx -y vercel@65.9.0 deploy --prod --yes",
+    "n8n:activate": "node scripts/n8n_activate.js",
+    "dev": "node scripts/dev_server.js",
     "n8n": "docker compose up -d && echo n8n running at http://localhost:5678",
     "n8n:stop": "docker compose down",
     "n8n:logs": "docker compose logs -f n8n",
@@ -15,5 +23,14 @@
     "n8n:import": "docker compose exec n8n n8n import:workflow --separate --input=/workflows",
     "n8n:no-docker": "node scripts/start_n8n.js"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "marked": "^18.1.2",
+    "pg": "^8.23.1"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.75.0"
+  }
 }

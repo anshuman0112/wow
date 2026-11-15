@@ -5,6 +5,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { workflow, webhook, schedule, code, ifTrue, wait, respond, http, SUPA, VAPI, GROQ } from './lib.js';
 
+const at_respondXml = (name, col, row) => {
+  const n = respond(name, '', col, row);
+  n.parameters = {
+    respondWith: 'text',
+    responseBody: "={{ '<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Dial><Sip>' + $env.VAPI_SIP_URI + '?X-Lead-Id=' + ($json.query?.lead || '') + '</Sip></Dial></Response>' }}",
+    options: { responseHeaders: { entries: [{ name: 'Content-Type', value: 'text/xml' }] } },
+  };
+  return n;
+};
 const out = path.join(path.dirname(fileURLToPath(import.meta.url)), 'workflows');
 const SB = '={{ $env.SUPABASE_URL }}';
 const json = expr => `={{ JSON.stringify(${expr}) }}`;
@@ -38,12 +47,14 @@ const messages = (art.messages || msg.messages || [])
 const aiLines = messages.filter(m => m.role === 'assistant').map(m => m.text).join('\n');
 const transcript = art.transcript || messages.map(m => (m.role === 'user' ? 'Lead: ' : 'Aanya: ') + m.text).join('\n');
 
-const recordingUrl = art.recordingUrl || art.recording?.mono?.combinedUrl || art.stereoRecordingUrl || msg.recordingUrl || null;
+// Vapi recordings live in a private bucket; only the presigned links (valid ~30 min) can be downloaded.
+const recordingUrl = art.presignedMonoUrl || art.presignedStereoUrl || art.recordingUrl || art.recording?.mono?.combinedUrl || msg.recordingUrl || null;
 const startedAt = msg.startedAt || call.startedAt || null;
 const endedAt = msg.endedAt || call.endedAt || null;
 const duration = msg.durationSeconds ?? (startedAt && endedAt ? (new Date(endedAt) - new Date(startedAt)) / 1000 : null);
 const vars = call.assistantOverrides?.variableValues || {};
-const leadId = call.metadata?.lead_id || null;
+// Phone calls carry the lead in call.metadata; browser calls started from a lead carry it in the overrides.
+const leadId = call.metadata?.lead_id || call.assistantOverrides?.metadata?.lead_id || vars.lead_id || null;
 const ext = (recordingUrl || '').split('?')[0].split('.').pop() || 'wav';
 const id = call.id || msg.call?.id;
 
@@ -58,7 +69,7 @@ const row = {
   duration_sec: duration,
   ended_reason: msg.endedReason || call.endedReason || null,
   cost_usd: msg.cost ?? call.cost ?? null,
-  recording_url: recordingUrl,
+  recording_url: null,            // set below to a long-lived Supabase playback link
   transcript,
   ai_lines: aiLines,
   messages,
@@ -76,7 +87,12 @@ const row = {
   analysis: q,
   raw: msg,
 };
-return [{ json: { row, lead_id: row.lead_id, phone: row.phone, recordingUrl, storagePath: id + '.' + ext } }];
+// Never overwrite saved data with blanks (e.g. if the Vapi fetch failed): drop empty fields.
+const isEmpty = v => v === null || v === undefined || v === '' ||
+  (Array.isArray(v) && v.length === 0) || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+for (const k of Object.keys(row)) if (isEmpty(row[k])) delete row[k];
+if (!fetched.id && !msg.artifact) delete row.do_not_call;
+return [{ json: { row, lead_id: row.lead_id || null, phone: row.phone || null, recordingUrl, storagePath: id + '.' + ext } }];
 `, 4, 0),
   http('Save call to Supabase', {
     method: 'POST', url: `${SB}/rest/v1/calls?on_conflict=vapi_call_id`,
@@ -107,18 +123,23 @@ return [{ json: { filter, patch } }];
 
   // Branch B: copy the recording into Supabase Storage
   ifTrue('Has recording?', "={{ !!$('Build call row').first().json.recordingUrl }}", 6, 1),
-  http('Download recording', { url: "={{ $('Build call row').first().json.recordingUrl }}", fileOut: true, continueOnFail: true }, 7, 1),
+  http('Download recording', { url: "={{ $('Build call row').first().json.recordingUrl }}", fileOut: true, continueOnFail: true, timeoutMs: 180000 }, 7, 1),
   http('Upload to Storage', {
     method: 'POST', url: `${SB}/storage/v1/object/recordings/{{ $('Build call row').first().json.storagePath }}`,
     headers: { apikey: SUPA.apikey, Authorization: SUPA.Authorization, 'x-upsert': 'true' },
-    binaryIn: 'data', continueOnFail: true,
+    binaryIn: 'data', continueOnFail: true, timeoutMs: 180000,
   }, 8, 1),
+  http('Create playback link', {
+    method: 'POST', url: `${SB}/storage/v1/object/sign/recordings/{{ $('Build call row').first().json.storagePath }}`,
+    headers: SUPA, body: '={{ JSON.stringify({ expiresIn: 31536000 }) }}',   // 1 year
+    continueOnFail: true,
+  }, 9, 1),
   http('Save storage path', {
     method: 'PATCH', url: `${SB}/rest/v1/calls?vapi_call_id=eq.{{ $('Build call row').first().json.row.vapi_call_id }}`,
     headers: { ...SUPA, Prefer: 'return=minimal' },
-    body: "={{ JSON.stringify({ storage_path: 'recordings/' + $('Build call row').first().json.storagePath }) }}",
+    body: "={{ JSON.stringify({ storage_path: 'recordings/' + $('Build call row').first().json.storagePath, recording_url: $json.signedURL ? $env.SUPABASE_URL + '/storage/v1' + $json.signedURL : null }) }}",
     continueOnFail: true,
-  }, 9, 1),
+  }, 10, 1),
 
   // Branch C: alert on hot leads (Telegram, optional)
   ifTrue('Is hot lead?', "={{ $('Build call row').first().json.row.interest === 'hot' && !!$env.TELEGRAM_BOT_TOKEN }}", 6, 2),
@@ -140,9 +161,10 @@ return [{ json: { filter, patch } }];
   ['Prepare lead update', 'Update lead'],
   ['Has recording?', 'Download recording', 0],
   ['Download recording', 'Upload to Storage'],
-  ['Upload to Storage', 'Save storage path'],
+  ['Upload to Storage', 'Create playback link'],
+  ['Create playback link', 'Save storage path'],
   ['Is hot lead?', 'Send Telegram alert', 0],
-], { active: true });
+], { active: true, id: 'iCvnbx7Iy6Ix63Va' });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WF2 · Lead import: (a) AI column mapping, (b) clean + save leads
@@ -158,7 +180,7 @@ return [{ json: { headers, messages: [{ role: 'system', content: system }, { rol
 `, 1, 0),
   http('Ask Groq for mapping', {
     method: 'POST', url: 'https://api.groq.com/openai/v1/chat/completions', headers: GROQ,
-    body: "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}",
+    body: "={{ JSON.stringify({ model: 'openai/gpt-oss-120b', reasoning_effort: 'low', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}",
     continueOnFail: true,
   }, 2, 0),
   code('Read mapping', String.raw`
@@ -225,19 +247,36 @@ return [{ json: { imported, received, skipped: received - imported } }];
   ['Clean leads', 'Save new leads'],
   ['Save new leads', 'Count imported'],
   ['Count imported', 'Return result'],
-], { active: true });
+], { active: true, id: 'MYXhLGo8hP9VnaPJ' });
 wf2.nodes.find(n => n.name === 'Save new leads').alwaysOutputData = true;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WF3 · Auto-dialer: every 5 min (10 AM–7 PM IST) call new / no-answer leads via Vapi + Twilio
 // ─────────────────────────────────────────────────────────────────────────────
-const wf3 = workflow('WF3 · Auto-dialer (Vapi + Twilio)', [
+const wf3 = workflow('WF3 · Auto-dialer + Call now (Vapi + Twilio)', [
   schedule('Every 5 minutes', 5, 0, 0),
+
+  // Twilio asks this URL what to do when the lead answers → connect them to Aanya's SIP line.
+  webhook('TwiML for Twilio', 'twiml-aanya', 0, 2, { respond: 'responseNode' }),
+  at_respondXml('Reply: connect to Aanya', 1, 2),
+
+  // "Call now" button on the dashboard → call one lead immediately (any time of day)
+  webhook('Call now request', 'call-now', 0, 1),
+  code('Check lead id', String.raw`
+const id = ($input.first().json.body || {}).lead_id || '';
+if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Send {"lead_id": "<uuid>"}');
+if (!$env.VAPI_PHONE_NUMBER_ID && !($env.TWILIO_ACCOUNT_SID && $env.TWILIO_AUTH_TOKEN && $env.VAPI_SIP_URI)) throw new Error('No phone line: add Twilio keys to .env (free bridge) or run npm run twilio');
+return [{ json: { id } }];
+`, 1, 1),
+  http('Get that lead', {
+    url: `${SB}/rest/v1/leads?select=id,name,phone,location,attempts,status&id=eq.{{ $json.id }}&status=neq.do_not_call`,
+    headers: SUPA,
+  }, 2, 1),
   code('Calling hours check', String.raw`
 const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }).format(new Date()));
 if (hour < 10 || hour >= 19) return [];               // only call 10:00–18:59 IST
-if (!$env.VAPI_ASSISTANT_ID || !$env.VAPI_PHONE_NUMBER_ID) {
-  throw new Error('Set VAPI_ASSISTANT_ID and VAPI_PHONE_NUMBER_ID in .env, then restart n8n.');
+if (!$env.VAPI_PHONE_NUMBER_ID && !($env.TWILIO_ACCOUNT_SID && $env.TWILIO_AUTH_TOKEN && $env.VAPI_SIP_URI)) {
+  throw new Error('No phone line: add Twilio keys to .env (free bridge) or run npm run twilio.');
 }
 return [{ json: { hour } }];
 `, 1, 0),
@@ -250,25 +289,44 @@ return [{ json: { hour } }];
     headers: { ...SUPA, Prefer: 'return=representation' },
     body: "={{ JSON.stringify({ status: 'calling', attempts: ($json.attempts || 0) + 1, last_called_at: new Date().toISOString() }) }}",
   }, 3, 0),
+  ifTrue('Use free Twilio bridge?', '={{ !$env.VAPI_PHONE_NUMBER_ID }}', 4, 1),
+  http('Ring via Twilio bridge', {
+    method: 'POST', url: '=https://api.twilio.com/2010-04-01/Accounts/{{ $env.TWILIO_ACCOUNT_SID }}/Calls.json',
+    headers: { Authorization: "={{ 'Basic ' + ($env.TWILIO_ACCOUNT_SID + ':' + $env.TWILIO_AUTH_TOKEN).base64Encode() }}" },
+    form: {
+      To: '={{ $json.phone }}',
+      From: '={{ $env.TWILIO_PHONE_NUMBER }}',
+      // Trial accounts can't send TwiML inline, so Twilio fetches it from our n8n webhook.
+      Url: "={{ $env.N8N_PUBLIC_URL + '/webhook/twiml-aanya?lead=' + $json.id }}",
+    },
+    continueOnFail: true,
+  }, 5, 1),
   http('Start Vapi phone call', {
     method: 'POST', url: 'https://api.vapi.ai/call', headers: VAPI,
     body: "={{ JSON.stringify({ assistantId: $env.VAPI_ASSISTANT_ID, phoneNumberId: $env.VAPI_PHONE_NUMBER_ID, customer: { number: $json.phone, name: $json.name || undefined }, assistantOverrides: { variableValues: { name: ($json.name || '').split(' ')[0], location: $json.location || '' } }, metadata: { lead_id: $json.id, campaign_id: 'divyasree-wow' } }) }}",
     continueOnFail: true,
-  }, 4, 0),
-  ifTrue('Call failed to start?', '={{ !!$json.error }}', 5, 0),
+  }, 5, 0),
+  ifTrue('Call failed to start?', '={{ !!$json.error }}', 6, 0),
   http('Mark as no answer', {
     method: 'PATCH', url: `${SB}/rest/v1/leads?id=eq.{{ $('Mark as calling').item.json.id }}`,
     headers: { ...SUPA, Prefer: 'return=minimal' },
     body: "={{ JSON.stringify({ status: 'no_answer' }) }}",
-  }, 6, 0),
+  }, 7, 0),
 ], [
   ['Every 5 minutes', 'Calling hours check'],
   ['Calling hours check', 'Get leads to call'],
   ['Get leads to call', 'Mark as calling'],
-  ['Mark as calling', 'Start Vapi phone call'],
+  ['TwiML for Twilio', 'Reply: connect to Aanya'],
+  ['Call now request', 'Check lead id'],
+  ['Check lead id', 'Get that lead'],
+  ['Get that lead', 'Mark as calling'],
+  ['Mark as calling', 'Use free Twilio bridge?'],
+  ['Use free Twilio bridge?', 'Ring via Twilio bridge', 0],
+  ['Use free Twilio bridge?', 'Start Vapi phone call', 1],
+  ['Ring via Twilio bridge', 'Call failed to start?'],
   ['Start Vapi phone call', 'Call failed to start?'],
   ['Call failed to start?', 'Mark as no answer', 0],
-], { active: false });   // turn on only after Twilio is connected
+], { active: false, id: '8VpOqJuNDWQenrOf' });   // turn on only after Twilio is connected
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WF1 · Knowledge builder: any business text → clean fact sheet (for reusing Vaani with a new client)
@@ -286,7 +344,7 @@ return [{ json: { campaign_id, messages: [{ role: 'system', content: system }, {
 `, 1, 0),
   http('Ask Groq to extract facts', {
     method: 'POST', url: 'https://api.groq.com/openai/v1/chat/completions', headers: GROQ,
-    body: "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}",
+    body: "={{ JSON.stringify({ model: 'openai/gpt-oss-120b', reasoning_effort: 'low', temperature: 0, response_format: { type: 'json_object' }, messages: $json.messages }) }}",
   }, 2, 0),
   code('Format fact sheet', String.raw`
 const { sections = [] } = JSON.parse($input.first().json.choices[0].message.content);
@@ -304,7 +362,7 @@ return [{ json: { campaign_id: $('Build extraction prompt').first().json.campaig
   ['Ask Groq to extract facts', 'Format fact sheet'],
   ['Format fact sheet', 'Save to campaign'],
   ['Save to campaign', 'Return fact sheet'],
-], { active: true });
+], { active: true, id: 'cHYHmxqY3LTVWwa5' });
 
 await mkdir(out, { recursive: true });
 const files = { 'wf1_knowledge_builder.json': wf1, 'wf2_lead_import.json': wf2, 'wf3_auto_dialer.json': wf3, 'wf4_end_of_call.json': wf4 };

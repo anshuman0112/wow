@@ -9,7 +9,7 @@ export const leadAnalysisOutput = {
     type: 'object',
     properties: {
       summary: { type: 'string', description: '2-3 sentence summary: who the lead is, what they said on each checkpoint, objections, and the agreed next step.' },
-      interest: { type: 'string', enum: ['hot', 'warm', 'cold'], description: 'hot = qualified and booked/eager for expert call; warm = interested but one checkpoint unresolved; cold = not interested, not a fit, or asked not to be called.' },
+      interest: { type: 'string', enum: ['hot', 'warm', 'cold'], description: 'hot = budget clearly fits (₹92.4 lakh+), location and timeline are OK, AND an expert callback is booked. warm = interested or callback booked, but budget is a stretch/unclear or another checkpoint is unresolved. cold = not interested, clearly not a fit, or asked not to be called.' },
       intent: { type: 'string', description: 'Self-use, Investment, Both, or Unknown, with a few words of detail.' },
       geography_fit: { type: 'string', description: 'Yes / No / Hesitant, plus a short reason.' },
       budget_fit: { type: 'string', description: 'Yes / No / Stretch, plus the budget mentioned if any.' },
@@ -24,25 +24,28 @@ export const leadAnalysisOutput = {
   },
 };
 
-// Text replacements applied right before speech so the voice pronounces names correctly.
-const pronunciationReplacements = [
-  ['Divyasree', 'Divya-shree'], ['DivyaSree', 'Divya-shree'],
-  ['Nandi', 'Nundhi'], ['Devanahalli', 'Dayva-nahalli'],
-  ['Doddaballapura', 'Dodda-balla-pura'], ['lakh', 'laakh'], ['Lakh', 'Laakh'],
-].map(([key, value]) => ({ type: 'exact', key, value }));
+import { voiceConfig } from '../web/js/campaign-data.js';
 
-export function buildAssistant({ systemPrompt, voiceId, serverUrl, structuredOutputId }) {
+// Live-call brain. Default: OpenAI GPT-4.1-mini billed to Vapi's free credits (fast, good Hindi,
+// automatic prompt caching, no per-minute cap). Override with VAPI_LLM=provider:model in .env,
+// e.g. VAPI_LLM=groq:openai/gpt-oss-20b (note: Groq's free tier allows only 8k tokens/minute).
+export function parseLlm(spec = 'openai:gpt-4.1-mini') {
+  const i = spec.indexOf(':');
+  return { provider: spec.slice(0, i), model: spec.slice(i + 1) };
+}
+
+export function buildAssistant({ systemPrompt, voiceId, serverUrl, structuredOutputId, llm = parseLlm() }) {
   return {
     name: 'Aanya · Divyasree WOW',
     firstMessageMode: 'assistant-speaks-first',
     firstMessage: "Hello {{ name | default: 'there' }}! This is Aanya, a consultant from Divyasree Developers, calling about Whispers of the Wind, our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?",
 
-    // Brain: Groq (free tier), fast and low-temperature to stay factual.
+    // Brain: low temperature to stay factual.
     model: {
-      provider: 'groq',
-      model: 'llama-3.3-70b-versatile',
+      provider: llm.provider,
+      model: llm.model,
       temperature: 0.3,
-      maxTokens: 160,
+      maxTokens: llm.provider === 'groq' ? 600 : 160,   // gpt-oss models spend tokens on reasoning first
       messages: [{ role: 'system', content: systemPrompt }],
       tools: [{ type: 'endCall' }],
     },
@@ -51,28 +54,22 @@ export function buildAssistant({ systemPrompt, voiceId, serverUrl, structuredOut
     transcriber: { provider: 'deepgram', model: 'nova-3', language: 'multi' },
 
     // Voice: ElevenLabs Flash v2.5 (lowest latency, speaks Hindi too).
-    voice: {
-      provider: '11labs',
-      voiceId,
-      model: 'eleven_flash_v2_5',
-      stability: 0.5,
-      similarityBoost: 0.75,
-      chunkPlan: { enabled: true, formatPlan: { enabled: true, replacements: pronunciationReplacements } },
-    },
+    voice: voiceConfig(voiceId),
 
     // Turn-taking: don't cut the user off; stop instantly when they interrupt.
     startSpeakingPlan: { waitSeconds: 0.4, smartEndpointingPlan: { provider: 'livekit' } },
     stopSpeakingPlan: { numWords: 1, voiceSeconds: 0.2, backoffSeconds: 1 },
     backgroundSpeechDenoisingPlan: { smartDenoisingPlan: { enabled: true } },
 
-    silenceTimeoutSeconds: 20,
-    maxDurationSeconds: 300,
+    silenceTimeoutSeconds: 15,     // hang up after 15 s of silence (protects free credits)
+    maxDurationSeconds: 240,       // hard cap: 4 minutes per call
     endCallMessage: 'Thank you for your time. Have a lovely day!',
     voicemailMessage: 'Hello, this is Aanya from Divyasree Developers about Whispers of the Wind, our villa plots near Nandi Hills. I will try you again later. Thank you!',
 
     // Recording + transcript + AI analysis after every call.
     artifactPlan: {
       recordingEnabled: true,
+      recordingFormat: 'mp3',          // ~8x smaller than WAV: faster to copy, cheaper to store
       ...(structuredOutputId ? { structuredOutputIds: [structuredOutputId] } : {}),
     },
 

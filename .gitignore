@@ -3,3 +3,11 @@ node_modules/
 vapi/.state.json
 *.log
 .claude/settings.local.json
+.vercel
+web/.vercel
+.venv/
+__pycache__/
+*.pyc
+
+.vercel
+.env*
