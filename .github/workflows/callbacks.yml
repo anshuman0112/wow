@@ -7,6 +7,9 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
+  push:                      # also run once whenever this file changes (handy to test it immediately)
+    branches: [main]
+    paths: [".github/workflows/callbacks.yml"]
 
 jobs:
   tick:
@@ -15,5 +18,7 @@ jobs:
     steps:
       - name: Dial due call-backs
         run: |
+          echo "Checking for due call-backs and re-attempts at $(date -u)"
           curl -fsS --max-time 90 "https://vaani-divyasree.vercel.app/api/dialer/tick" \
             -H "X-Dialer-Key: ${{ secrets.DIALER_KEY }}"
+          echo
