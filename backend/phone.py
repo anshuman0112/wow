@@ -32,16 +32,21 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str) -> dict:
     if s.phone_line == "none":
         raise CallError("No phone line configured: add Twilio keys (free bridge) or a Vapi phone number.")
     sb = Supabase(http)
-    rows = await sb.select("leads", {"select": "id,name,phone,location,attempts,status", "id": f"eq.{lead_id}"})
+    rows = await sb.select("leads", {"select": "id,name,phone,location,attempts,status,last_called_at", "id": f"eq.{lead_id}"})
     if not rows:
         raise CallError("Lead not found.")
     lead = rows[0]
     if lead["status"] == "do_not_call":
         raise CallError("This lead asked not to be called.")
 
+    # Mark "calling" while we ask Twilio to dial (blocks double clicks). The attempt is only COUNTED once the
+    # phone company actually accepts the call; if Twilio refuses (e.g. unverified number), nothing is counted.
+    before = {"status": lead["status"], "last_called_at": lead.get("last_called_at")}
     await sb.update("leads", {"id": f"eq.{lead_id}"}, {
-        "status": "calling", "attempts": (lead.get("attempts") or 0) + 1,
-        "last_called_at": datetime.now(timezone.utc).isoformat()})
+        "status": "calling", "last_called_at": datetime.now(timezone.utc).isoformat()})
+
+    async def dialled() -> None:
+        await sb.update("leads", {"id": f"eq.{lead_id}"}, {"attempts": (lead.get("attempts") or 0) + 1})
     from . import cache, voices
     lead["voice"] = await voices.selected(http)   # the voice chosen in the dashboard, read before dialling
     await cache.put_lead(http, lead)   # the call's first request reads it from Redis, not the database
@@ -53,6 +58,7 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str) -> dict:
                 "customer": {"number": lead["phone"], **({"name": lead["name"]} if lead.get("name") else {})},
                 "assistantOverrides": {"variableValues": {"name": first, "location": lead.get("location") or "", "lead_id": lead_id}},
                 "metadata": {"lead_id": lead_id, "campaign_id": s.campaign_id}})
+            await dialled()
             return {"ok": True, "via": "vapi-number", "id": res.get("id")}
         q = f"?lead={quote(lead_id)}"
         base = s.public_base_url
@@ -64,10 +70,13 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str) -> dict:
         else:                                 # free trial: Twilio speech + Python conversation loop
             url = f"{base}/api/phone/start{q}"
         res = await Twilio(http).call(lead["phone"], s.twilio_number, url, status_callback=f"{base}/api/phone/status{q}")
+        await dialled()
         return {"ok": True, "via": s.phone_line, "id": res.get("sid")}
     except Exception as e:
-        await sb.update("leads", {"id": f"eq.{lead_id}"}, {"status": "no_answer"})
-        if "21219" in str(e) or "unverified" in str(e).lower():
+        # The call never left: put the lead back exactly as it was (no fake "no answer", no fake attempt).
+        await sb.update("leads", {"id": f"eq.{lead_id}"}, before)
+        msg = str(e).lower()
+        if any(x in msg for x in ("21219", "573002", "unverified", "verified recipient")):
             raise CallError("This number isn't verified on the free Twilio trial yet. Use \"Verify a number\" "
                             "on the Leads page first (takes 30 seconds).") from e
         raise CallError(str(e)) from e

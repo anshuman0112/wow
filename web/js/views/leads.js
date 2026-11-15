@@ -62,7 +62,7 @@ export default async function leadsView(el) {
             <tbody>
               ${shown.map(l => `
                 <tr>
-                  <td><div class="cell-title">${esc(l.name || '—')}</div>${l.attempts ? `<div class="cell-sub">${l.attempts} call attempt${l.attempts > 1 ? 's' : ''}</div>` : ''}</td>
+                  <td><div class="cell-title">${esc(l.name || '—')}</div>${l.attempts ? `<div class="cell-sub" title="Calls the phone network actually dialled">${l.attempts} call${l.attempts > 1 ? 's' : ''} dialled</div>` : ''}</td>
                   <td class="mono">${esc(l.phone)}</td>
                   <td>${esc(l.location || '—')}</td>
                   <td>${esc(l.budget || '—')}</td>
