@@ -49,32 +49,36 @@ def compact_prompt() -> str:
     from .campaign import data
     d = data()
     q = config_store.questions()
-    facts = "; ".join(f"{f['k']}: {f['v']}{' (approx.)' if f['src'] == 'web' else ''}" for g in d["facts"] for f in g["items"])
-    return f"""You are Divya, a Divyasree Developers consultant on an outbound call about Whispers of the Wind, premium "Private Valley" villa plots near Nandi Hills, North Bengaluru. Tone: premium, warm, never pushy. Goal: qualify on 4 checkpoints, short pitch, book a Property Expert call, in 2-3 minutes.
+    # Facts trimmed for the phone: approximate figures are flagged once ("~"), not per line.
+    facts = "; ".join(f"{f['k']}: {_short_fact(f['v'])}" for g in d["facts"] for f in g["items"])
+    # Kept short on purpose: every token counts against the free 8k-tokens/minute Groq limit, and hitting
+    # that limit is what made slow phone turns (model switches + timeouts). Objections, FAQs, slot
+    # confirmation and the next checkpoint are also enforced in code (faq.py), so the prompt stays lean.
+    return f"""You are Divya, Divyasree Developers' consultant, on an outbound call about Whispers of the Wind: premium "Private Valley" villa plots near Nandi Hills, North Bengaluru. Premium, warm, never pushy. Goal in 2-3 min: 4 checkpoints, short pitch, book a Property Expert call.
 
-RULE 1 — ANSWER QUESTIONS FIRST: if the lead asks anything (price, budget range, amenities, clubhouse, location, distances, nearby schools/hospitals, possession, RERA…), answer it directly in one sentence using FACTS, then ask ONE next question from the flow. Never ignore a question and never push the expert call while the lead is still asking about the property.
-RULE 2 — NEVER INVENT: only state FACTS below. Price range is ninety-two point four lakh to two point four six crore incl. taxes — say it whenever price or budget is asked. For things not in FACTS (exact plot price, EMI, discounts, schools' fees, other projects) say our Property Expert will confirm. NEVER propose a day or time yourself — always ASK the lead what day and time suits them.
-RULE 3 — STYLE: max 2 short sentences; one question per turn; varied affirmation (Understood / Perfect / Got it); never re-ask what the lead already told you; money in words; admit you are Divyasree's AI assistant if asked; after two refusals or "don't call", apologise and end.
-RULE 4 — UNCLEAR SPEECH: phone transcription can be wrong (e.g. "7260 lacs" probably means "70 lakh"). If a number or answer looks odd, confirm it briefly ("Just to confirm, about seventy lakh?").
+RULES
+1. Lead asks something -> answer in one sentence from FACTS, then ask ONE next FLOW question. Never ignore a question.
+2. Never invent. Price: ninety-two point four lakh to two point four six crore incl. taxes. Not in FACTS (exact plot price, EMI, discounts, returns) -> the Property Expert will confirm. NEVER propose a day/time; ask the lead.
+3. Max 2 short sentences, one question per turn, vary affirmations (Understood / Perfect / Got it), never re-ask what they told you, money in words. If asked, you are Divyasree's AI assistant.
+4. Transcripts can be wrong ("7260 lacs" = "70 lakh"): confirm odd numbers briefly.
 
-FLOW (skip answered steps; only move on when the lead has no open question; use these questions, in your own natural words if needed): 1) Intent: "{q['intent']['en']}" 2) Geography: "{q['geography']['en']}" 3) Budget: "{q['budget']['en']}" 4) Timeline: "{q['timeline']['en']}" 4b) Decision (one soft question, skip if already known): "{q['decision']['en']}" 5) PITCH (required, never skip, in the same turn as step 6): "{q['pitch']['en']}" 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
+FLOW (skip answered steps): 1 Intent: "{q['intent']['en']}" 2 Geography: "{q['geography']['en']}" 3 Budget: "{q['budget']['en']}" 4 Timeline: "{q['timeline']['en']}" 4b Decision (soft, once): "{q['decision']['en']}" 5 PITCH, never skip, same turn as 6: "{q['pitch']['en']}" 6 Let THEM choose the day and time, confirm it back. 7 Thank and end.
 
-OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; wants ready-to-move or in the city -> 'Understood. This is a plotted community with possession in December 2029, so it suits buyers who can plan ahead', offer the Property Expert, never refuse; busy -> (if they sound irritated, first apologise briefly) ask WHEN to call back ("No problem! When would be a good time for me to call you back?"); when they give a time, repeat it back ("Perfect, I'll call you back tomorrow at 5 pm. Thank you!") and end; never suggest a time yourself; if they won't give one, say you'll try again later and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
+OBJECTIONS (up to two warm, truthful counters, then accept): far -> weekend escape, ~30 min to airport, 10 min to STRR, growth corridor; budget -> staged development-linked payments, the expert arranges plot loans for a light monthly outgo, the gap is small (never quote EMI, discount or returns); wants ready/city -> "This is a plotted community with possession in December 2029, so it suits buyers who plan ahead", offer the expert; busy -> (apologise if irritated) ask WHEN to call back, repeat their time back, end (never suggest a time); irritated -> apologise, keep it short; angry, "don't call" or two refusals -> apologise, end.
 
-LANGUAGE: start in English; if the lead speaks Hindi/Hinglish, reply in simple Hinglish (English letters only).
+LANGUAGE: English; if the lead speaks Hindi/Hinglish, reply in simple Hinglish (English letters).
 
-FACTS: {facts}"""
+FACTS (~ = approximate): {facts}"""
+
+
+def _short_fact(v: str) -> str:
+    v = re.sub(r"\s*\((?:approx\.?|the Property Expert[^)]*|exact[^)]*)\)", "", str(v))
+    return v.replace("approximately", "~").replace(" as listed online", "").strip()
 
 
 PHONE_RULES = """
 
-# PHONE MODE (this call runs over a plain phone line)
-You cannot use tools. Reply ONLY with JSON: {"reply": "<what you say next>", "end": true|false, "lang": "en"|"hi"}
-- "reply": 1–2 short spoken sentences, English letters only (Hinglish is fine), no symbols or lists.
-- "end": true only when the call should finish (callback booked and confirmed, lead declined twice,
-  asked not to be called, wrong person, or already said goodbye). Your reply is then the goodbye line.
-- "lang": "hi" if the lead is speaking Hindi/Hinglish, otherwise "en".
-- If the lead's words look garbled or empty, politely ask them to repeat.
+PHONE: reply ONLY with JSON {"reply": "...", "end": true|false, "lang": "en"|"hi"}. reply = 1-2 short spoken sentences, English letters only, no symbols. end = true only when finishing (time booked and confirmed, declined twice, don't call, wrong person, goodbye); reply is then the goodbye. lang = "hi" for Hindi/Hinglish. Garbled words -> ask them to repeat.
 """
 
 
@@ -178,8 +182,11 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number:
 
 
 async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str, silence: bool) -> str:
+    t_in = time.perf_counter()
     sb, groq = Supabase(http), Groq(http)
-    row = await load_session(http, sb, call_sid)
+    # Session + the shared Groq quota picture are fetched at the same time (no extra wait).
+    row, _ = await asyncio.gather(load_session(http, sb, call_sid), cache.get_quota(http))
+    t_loaded = time.perf_counter()
     if row is None:  # Twilio called /turn first (shouldn't happen) — start fresh
         return await start(http, call_sid, lead_id, None)
     messages = row.setdefault("messages", [])
@@ -204,14 +211,24 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
                             row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"))
     messages.append({"role": "user", "text": speech.strip()})
     out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
+    t_replied = time.perf_counter()
     reply = (out.get("reply") or "Sorry, could you say that once more?").strip()[:600]
     end = bool(out.get("end")) or len(messages) >= MAX_TURNS * 2
     raw.update({"lang": out.get("lang", raw.get("lang", "en")), "silences": 0})
-    raw.setdefault("usage", []).append(out.get("_usage"))     # per-turn tokens/latency for evaluation
+    usage = dict(out.get("_usage") or {})
+    raw.setdefault("usage", []).append(usage)     # per-turn tokens/latency for evaluation
     messages.append({"role": "assistant", "text": reply})
     if end:
         raw["ended_reason"] = "assistant-ended-call"
-    await save_session(http, sb, call_sid, row)
+    # Timing of this turn on our server (ms), stored with the call. The final session write (~20 ms)
+    # can't be inside the record it writes, so the full total is printed to the server log below.
+    usage["t_ms"] = {"load": round((t_loaded - t_in) * 1000), "reply": round((t_replied - t_loaded) * 1000),
+                     "turn": len(messages) // 2}
+    await asyncio.gather(save_session(http, sb, call_sid, row), cache.set_quota(http))
+    usage["t_ms"]["server_total"] = round((time.perf_counter() - t_in) * 1000)
+    print(f"[latency] call={call_sid[-6:]} turn={usage['t_ms']['turn']} model={usage.get('model')} "
+          f"load={usage['t_ms']['load']}ms reply={usage['t_ms']['reply']}ms total={usage['t_ms']['server_total']}ms "
+          f"attempts={usage.get('attempts')}", flush=True)
     if end:
         if not cache.fast_enough():
             await finish(http, call_sid, ended_reason="assistant-ended-call")
@@ -233,7 +250,8 @@ def speakable(text: str) -> str:
 # Twilio's trial announcement is sometimes transcribed as the lead's first words — it isn't them.
 TRIAL_NOISE = re.compile(r"no longer being recorded|trial account|press any key|free trial|twilio", re.I)
 
-REPLY_BUDGET_S = 3.0   # max time we let the AI think on a live call before falling back
+REPLY_BUDGET_S = 2.5   # max time we let the AI think on a live call before falling back to the script
+REPLY_MAX_TOKENS = 250  # replies are 1-2 sentences (+ a little reasoning); a smaller cap also uses less of the free per-minute quota
 HISTORY_WINDOW = 12   # last ~6 exchanges: enough context, bounded token cost on long calls
 
 
@@ -255,14 +273,20 @@ async def think(groq: Groq, messages: list[dict], name: str | None = None, locat
     t0 = time.perf_counter()
     out: dict = {}
 
+    chat = build_chat(messages, name, location, lang)
+
     async def attempt() -> dict:
+        # One pass over the models (quota-aware order). Retry only if a reply came back empty AND there is
+        # still time — the old "always try twice" doubled the wait whenever every model was busy.
         for _ in range(2):
             try:
-                r = await groq.chat_json(build_chat(messages, name, location, lang))
+                r = await groq.chat_json(chat, max_tokens=REPLY_MAX_TOKENS, live=True)
             except Exception:  # noqa: BLE001
                 r = {}
             if (r.get("reply") or "").strip():
                 return r
+            if time.perf_counter() - t0 > REPLY_BUDGET_S - 1.0:
+                break
         return {}
 
     try:
@@ -271,7 +295,8 @@ async def think(groq: Groq, messages: list[dict], name: str | None = None, locat
         out = await asyncio.wait_for(attempt(), timeout=REPLY_BUDGET_S)
     except asyncio.TimeoutError:
         out = {}
-        groq.last_usage = {"model": "timeout", "budget_s": REPLY_BUDGET_S}
+        groq.last_usage = {"model": "timeout", "budget_s": REPLY_BUDGET_S,
+                           "attempts": (groq.last_usage or {}).get("attempts")}
     out["_latency_s"] = round(time.perf_counter() - t0, 2)
     out["_usage"] = groq.last_usage
     return out
@@ -321,7 +346,8 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
         else:   # every model rate-limited/failed: answer from the script instead of "say that once more"
             fb = faq.fallback_reply(messages, lang)
             out.update({"reply": fb, "end": bool(re.search(r"have a lovely day|aapke time ke liye dhanyavaad", fb.lower())), "lang": lang,
-                        "_usage": {"model": "rule:fallback", "prompt_tokens": 0, "completion_tokens": 0}})
+                        "_usage": {"model": "rule:fallback", "prompt_tokens": 0, "completion_tokens": 0,
+                                   "attempts": (out.get("_usage") or {}).get("attempts")}})   # keep why the AI failed
     reply = speakable(out.get("reply") or "")
     if out.get("end") and reply.rstrip().endswith("?"):
         out["end"] = False   # Divya is still asking something: never hang up on an open question

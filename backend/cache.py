@@ -121,3 +121,26 @@ async def set_session(http: httpx.AsyncClient, call_sid: str, session: dict) -> 
         return True
     except httpx.HTTPError:
         return False
+
+
+async def get_quota(http: httpx.AsyncClient) -> None:
+    """Load Groq's per-model token budget into this server instance (newer readings win)."""
+    from .clients import QUOTA
+    if not fast_enough():
+        return
+    try:
+        raw = await _cmd(http, "GET", "groq:quota")
+        for model, (left, at) in (json.loads(raw) if raw else {}).items():
+            if model not in QUOTA or QUOTA[model][1] < at:
+                QUOTA[model] = (float(left), float(at))
+    except (httpx.HTTPError, json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+
+async def set_quota(http: httpx.AsyncClient) -> None:
+    from .clients import QUOTA
+    if fast_enough() and QUOTA:
+        try:
+            await _cmd(http, "SET", "groq:quota", json.dumps(QUOTA), "EX", 120)
+        except httpx.HTTPError:
+            pass

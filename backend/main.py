@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import calls, knowledge, leads, phone, phone_agent, stream_agent
-from .clients import TIMEOUT, Groq, ServiceError, Supabase
+from .clients import TIMEOUT, Groq, ServiceError, Supabase, shared_client
 from .settings import settings
 
 app = FastAPI(title="WOW Voice Agent API", version="1.0.0",
@@ -37,8 +37,7 @@ async def server_timing(request: Request, call_next):
     if request.url.path.startswith("/api/"):
         # Settings page values (questions, scoring, hours, cadence…): refreshed at most every 30 s.
         from . import config_store
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            await config_store.ensure(client)
+        await config_store.ensure(shared_client())   # reused connection: no new TLS handshake per request
     response = await call_next(request)
     response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.0f}"
     return response
@@ -66,8 +65,9 @@ app.add_middleware(
 
 
 async def http_client() -> AsyncIterator[httpx.AsyncClient]:
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        yield client
+    # One long-lived connection pool per server instance (Groq, Redis, Supabase, Twilio connections stay
+    # open between requests), instead of a new client + TLS handshakes on every phone turn.
+    yield shared_client()
 
 
 @app.exception_handler(ServiceError)

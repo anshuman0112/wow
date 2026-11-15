@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import httpx
@@ -138,28 +139,55 @@ class Groq:
         _raise("groq", r)
         return json.loads(r.json()["choices"][0]["message"]["content"])
 
-    # Free-tier Groq allows ~8k tokens/minute PER MODEL, so live phone turns rotate across models on 429.
+    # Free-tier Groq allows 8k tokens/minute PER MODEL (a bucket that refills ~133 tokens/s).
+    # Before: we tried models in a fixed order and only found out a model was full from a 429 —
+    # each failed try cost time, and a few turns ran out the 3 s budget. Now every reply tells us
+    # how many tokens that model has left, so we pick a model that can take the request up front.
     PHONE_MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b")
+    TPM = 8000
 
-    async def chat_json(self, messages: list[dict], max_tokens: int = 400) -> dict:
+    def _room(self, model: str) -> float:
+        """Tokens this model can take right now (estimated from its last reply + refill since)."""
+        q = QUOTA.get(model)
+        if not q:
+            return self.TPM
+        remaining, at = q
+        return min(self.TPM, remaining + (time.time() - at) * self.TPM / 60)
+
+    def _order(self, need: int) -> list[str]:
+        fits = [m for m in self.PHONE_MODELS if self._room(m) >= need]
+        rest = sorted((m for m in self.PHONE_MODELS if m not in fits), key=self._room, reverse=True)
+        return fits + rest   # models that fit first (preferred order), then the fullest-bucket fallback
+
+    async def chat_json(self, messages: list[dict], max_tokens: int = 400, *, live: bool = False) -> dict:
+        """JSON chat. live=True (a phone turn): short timeouts, quota-aware model choice, timings recorded."""
         last = None
-        for model in self.PHONE_MODELS:
-            body = {"model": model, "temperature": 0.3, "max_completion_tokens": max_tokens,
-                    "response_format": {"type": "json_object"}, "messages": messages}
+        need = sum(len(m.get("content") or "") for m in messages) // 4 + max_tokens
+        attempts: list[dict] = []
+        self.last_usage = {"model": "in-progress", "attempts": attempts}   # kept even if the caller times us out
+        for model in self._order(need):
+            body = {"model": model, "temperature": 0.3, "max_completion_tokens": max_tokens, "messages": messages}
+            if not live:   # live turns skip Groq's strict JSON check: it rejected some replies with a 400 (~0.5 s lost)
+                body["response_format"] = {"type": "json_object"}
             if model.startswith("openai/gpt-oss"):
                 body["reasoning_effort"] = "low"
+            t0 = time.perf_counter()
             try:
                 r = await self.http.post("https://api.groq.com/openai/v1/chat/completions", json=body, headers=self.h,
-                                         timeout=httpx.Timeout(2.5, connect=2.0))   # live call: a slow model is skipped fast
-            except httpx.HTTPError:
+                                         timeout=httpx.Timeout(1.8, connect=1.0) if live else httpx.Timeout(20.0, connect=5.0))
+            except httpx.HTTPError as e:
+                attempts.append({"model": model, "status": type(e).__name__, "ms": round((time.perf_counter() - t0) * 1000)})
                 continue
+            attempts.append({"model": model, "status": r.status_code, "ms": round((time.perf_counter() - t0) * 1000),
+                             **({"why": r.text[:90]} if r.status_code != 200 else {})})
+            _note_quota(model, r)
             if r.status_code in (429, 503) or (r.status_code == 400 and ("model" in r.text.lower() or "json_validate" in r.text)):
                 last = r
                 continue  # rate-limited, model unavailable or bad JSON → try the next free model
             _raise("groq", r)
             try:
                 j = r.json()
-                out = json.loads(j["choices"][0]["message"]["content"] or "{}")
+                out = _loose_json(j["choices"][0]["message"]["content"] or "")
             except (json.JSONDecodeError, KeyError, IndexError):
                 last = r
                 continue
@@ -168,12 +196,70 @@ class Groq:
             self.last_usage = {"model": model, "prompt_tokens": u.get("prompt_tokens"),
                                "cached_tokens": (u.get("prompt_tokens_details") or {}).get("cached_tokens"),
                                "completion_tokens": u.get("completion_tokens"),
-                               "seconds": round(float(u.get("total_time") or 0), 2)}
+                               "seconds": round(float(u.get("total_time") or 0), 2),
+                               "queue_s": round(float(u.get("queue_time") or 0), 2), "attempts": attempts}
             return out
+        self.last_usage = {"model": "none", "attempts": attempts}
         _raise("groq", last) if last is not None else None
         return {}
 
     last_usage: dict | None = None
+
+
+def _loose_json(text: str) -> dict:
+    """The model's JSON reply, tolerating extra text around it; plain text becomes the reply itself."""
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    start, end = text.find("{"), text.rfind("}")
+    if 0 <= start < end:
+        try:
+            return json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+    if text and "{" not in text:
+        return {"reply": text}
+    raise json.JSONDecodeError("no JSON object", text, 0)
+
+
+# model -> (tokens remaining, unix time we learned it). Shared by all calls on this server instance and
+# mirrored in Redis (see cache.get_quota / set_quota) so other instances start with the same picture.
+QUOTA: dict[str, tuple[float, float]] = {}
+
+
+def _note_quota(model: str, r: httpx.Response) -> None:
+    left = r.headers.get("x-ratelimit-remaining-tokens")
+    if r.status_code == 429:
+        # Per-minute OR per-day limit: Groq says how long to wait. Park the model until then
+        # (a "future" timestamp keeps its estimated room below zero until it is usable again).
+        try:
+            wait = float(r.headers.get("retry-after") or 0)
+        except ValueError:
+            wait = 0
+        QUOTA[model] = (0.0, time.time() + max(wait, 5))
+    elif left is not None:
+        try:
+            QUOTA[model] = (float(left), time.time())
+        except ValueError:
+            pass
+
+
+# ── One shared connection pool per server instance ───────────────────────────
+# Opening a new HTTPS connection (DNS + TLS handshake) to Groq/Redis on every phone turn costs time.
+# Keep one client alive and reuse it; a new one is made only if the event loop changed.
+_SHARED: tuple[object, httpx.AsyncClient] | None = None
+
+
+def shared_client() -> httpx.AsyncClient:
+    import asyncio
+    global _SHARED
+    loop = asyncio.get_running_loop()
+    if _SHARED is None or _SHARED[0] is not loop or _SHARED[1].is_closed:
+        _SHARED = (loop, httpx.AsyncClient(timeout=TIMEOUT, limits=httpx.Limits(max_keepalive_connections=20,
+                                                                                keepalive_expiry=120)))
+    return _SHARED[1]
 
 
 # ── Telegram (optional hot-lead alerts) ──────────────────────────────────────
