@@ -20,16 +20,16 @@ export const mode = () => (isLive.supabase() ? 'live' : 'demo');
 
 export async function getLeads() {
   if (mode() === 'demo') return mem.leads;
-  const { data, error } = await (await sb()).from('leads_public').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return data;
+  const r = await fetch(`${config.apiBaseUrl}/data/leads`);   // signed-in API (the database is private)
+  if (!r.ok) throw new Error(`Could not load leads (${r.status})`);
+  return await r.json();
 }
 
 export async function getCalls() {
   if (mode() === 'demo') return mem.calls;
-  const { data, error } = await (await sb()).from('calls_public').select('*').order('started_at', { ascending: false });
-  if (error) throw error;
-  return data.map(normaliseCall);
+  const r = await fetch(`${config.apiBaseUrl}/data/calls`);   // signed-in API (the database is private)
+  if (!r.ok) throw new Error(`Could not load calls (${r.status})`);
+  return (await r.json()).map(normaliseCall);
 }
 
 export async function getCall(id) {

@@ -1,3 +1,4 @@
+import { signedIn, renderSignIn, signOut, session } from './auth.js';   // first: adds the session to API calls
 import { icon } from './ui.js';
 import { mode } from './store.js';
 import overview from './views/overview.js';
@@ -62,9 +63,17 @@ document.getElementById('theme-btn').addEventListener('click', () => {
   try { localStorage.setItem('vaani-theme', root.dataset.theme); } catch {}
 });
 
-document.getElementById('mode-pill').innerHTML = mode() === 'live'
-  ? '<span class="badge b-ok"><span class="dot"></span>Live data</span>'
-  : '<span class="badge b-gold"><span class="dot"></span>Demo data</span>';
-
-window.addEventListener('hashchange', router);
-router();
+if (!signedIn()) {
+  renderSignIn(document.body);   // private dashboard: nothing loads until signed in
+} else {
+  document.getElementById('mode-pill').innerHTML = mode() === 'live'
+    ? '<span class="badge b-ok"><span class="dot"></span>Live data</span>'
+    : '<span class="badge b-gold"><span class="dot"></span>Demo data</span>';
+  const out = document.createElement('button');
+  out.className = 'btn btn-ghost small'; out.style.padding = '4px 8px'; out.textContent = 'Sign out';
+  out.title = `Signed in as ${session()?.email || ''}`;
+  out.onclick = signOut;
+  document.getElementById('theme-btn')?.after(out);
+  window.addEventListener('hashchange', router);
+  router();
+}

@@ -2,6 +2,7 @@
 const KEY = 'wow-admin-pin';
 
 export function getPin() {
+  try { if (JSON.parse(localStorage.getItem('wow-session') || 'null')?.token) return 'signed-in'; } catch {}
   let pin = '';
   try { pin = sessionStorage.getItem(KEY) || ''; } catch {}
   if (!pin) pin = window.prompt('Admin PIN:') || '';

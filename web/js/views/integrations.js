@@ -92,7 +92,7 @@ document.addEventListener('click', async e => {
   const t = e.target.closest('[data-test]');
   if (!t) return;
   let pin = '';
-  try { pin = sessionStorage.getItem('wow-admin-pin') || ''; } catch {}
+  try { pin = JSON.parse(localStorage.getItem('wow-session') || 'null')?.token ? 'signed-in' : sessionStorage.getItem('wow-admin-pin') || ''; } catch {}
   if (!pin) pin = window.prompt('Admin PIN (same as Settings):') || '';
   if (!pin) return;
   const phone = window.prompt('Phone number for the test lead (a verified number gets a real call):', '+91 90000 00999');

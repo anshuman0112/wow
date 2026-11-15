@@ -217,6 +217,7 @@ Everything Divya knows lives in `web/js/campaign.json`: persona, flow, facts, FA
 There's no code to change.
 
 ## Privacy and safety
+- **Sign-in:** the dashboard is private. One admin account (`ADMIN_EMAIL`); only a PBKDF2 hash of the password is stored (`ADMIN_PASSWORD_HASH`). Sessions last 7 days. Every API route needs the session except the public ones (Enquire form, lead-source webhooks, Twilio/Vapi webhooks, scheduler). The database is not readable with the public key.
 - Private keys live only in `.env` (git-ignored) and in Vercel's environment variables. The browser only gets public keys.
 - The browser's Vapi key is **locked** to this site and to Divya, so nobody can reuse it elsewhere.
 - Twilio requests are checked against the account, and number verification is rate-limited, to prevent abuse.

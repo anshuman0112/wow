@@ -27,12 +27,6 @@ from .settings import settings
 
 app = FastAPI(title="WOW Voice Agent API", version="1.0.0",
               description="Backend for WOW Voice Agent — the Divyasree outbound AI voice agent (Divya).")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://vaani-divyasree.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_origin_regex=r"https://web-[a-z0-9-]+\.vercel\.app",
-    allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"],
-)
 
 
 @app.middleware("http")
@@ -48,6 +42,27 @@ async def server_timing(request: Request, call_next):
     response = await call_next(request)
     response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.0f}"
     return response
+
+
+@app.middleware("http")
+async def require_sign_in(request: Request, call_next):
+    """Every /api route needs a signed-in session, except the public ones (lead sources, Twilio, Vapi, scheduler)."""
+    from . import auth
+    path = request.url.path
+    request.state.user = auth.verify(auth.bearer(request.headers))
+    if (request.method != "OPTIONS" and path.startswith("/api/") and not auth.is_public(path)
+            and auth.configured() and not request.state.user):
+        return JSONResponse(status_code=401, content={"error": "sign in required"})
+    return await call_next(request)
+
+
+# Added last = outermost: answers browser pre-flight checks and adds CORS headers even to 401 answers.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://vaani-divyasree.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"https://web-[a-z0-9-]+\.vercel\.app",
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"], allow_headers=["*"],
+)
 
 
 async def http_client() -> AsyncIterator[httpx.AsyncClient]:
@@ -566,6 +581,43 @@ async def twilio_media_stream(ws: WebSocket):
     await stream_agent.handle(ws)
 
 
+# ── Sign-in ─────────────────────────────────────────────────────────────────
+class LoginReq(BaseModel):
+    email: str = Field(max_length=200)
+    password: str = Field(max_length=200)
+
+
+@app.post("/api/auth/login")
+async def auth_login(req: LoginReq, request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    from . import auth, cache
+    key = f"login_fail:{_client_ip(request)}"
+    if cache.enabled() and int(await cache._cmd(http, "GET", key) or 0) >= 10:
+        raise HTTPException(429, "Too many wrong attempts. Try again in 15 minutes.")
+    res = auth.login(req.email, req.password)
+    if not res:
+        if cache.enabled():
+            await cache._cmd(http, "INCR", key)
+            await cache._cmd(http, "EXPIRE", key, 900)
+        raise HTTPException(401, "Wrong email or password.")
+    return res
+
+
+@app.get("/api/auth/me")
+async def auth_me(request: Request):
+    return {"email": request.state.user}
+
+
+# ── Dashboard data (behind the sign-in; the database is no longer readable with the public key) ──
+@app.get("/api/data/leads")
+async def data_leads(http: httpx.AsyncClient = Depends(http_client)):
+    return await Supabase(http).select("leads_public", {"select": "*", "order": "created_at.desc"})
+
+
+@app.get("/api/data/calls")
+async def data_calls(http: httpx.AsyncClient = Depends(http_client)):
+    return await Supabase(http).select("calls_public", {"select": "*", "order": "started_at.desc"})
+
+
 # ── Settings page ───────────────────────────────────────────────────────────
 @app.get("/api/settings")
 async def get_settings():
@@ -576,8 +628,10 @@ async def get_settings():
 
 
 def _admin_pin() -> str:
+    """The old admin PIN, only used when no sign-in is configured (signed-in users are admins)."""
     import os
-    return os.environ.get("ADMIN_PIN", "").strip()
+    from . import auth
+    return "" if auth.configured() else os.environ.get("ADMIN_PIN", "").strip()
 
 
 @app.put("/api/settings")

@@ -22,10 +22,12 @@ function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);   // two calls finishing at once never write the same row twice
   try {
-    const phones = sheet.getRange(2, 3, Math.max(sheet.getLastRow() - 1, 1), 1).getValues().map(r => String(r[0]));
-    const at = phones.indexOf(String(p.phone));
+    // match by digits only: Sheets may have stored an older number as 91… without the +
+    const digits = v => String(v).replace(/\D/g, '');
+    const phones = sheet.getRange(2, 3, Math.max(sheet.getLastRow() - 1, 1), 1).getValues().map(r => digits(r[0]));
+    const at = phones.indexOf(digits(p.phone));
     const prevCalls = at >= 0 ? Number(sheet.getRange(at + 2, 18).getValue() || 0) : 0;
-    const row = [new Date(), p.name || '', p.phone, p.city || '', p.source || '', p.score ?? '', p.interest || '',
+    const row = [new Date(), p.name || '', "'" + p.phone, p.city || '', p.source || '', p.score ?? '', p.interest || '',
       p.intent || '', p.location_fit || '', p.budget_fit || '', p.timeline_fit || '', p.decision_maker || '',
       (p.objections || []).join('; '), p.next_action || '', p.expert_call || '', p.call_back_at || '',
       p.summary || '', prevCalls + 1, p.call_id || ''];

@@ -118,10 +118,10 @@ alter table leads     enable row level security;
 alter table calls     enable row level security;
 
 revoke all on leads, calls from anon, authenticated;
-grant select on leads_public, calls_public to anon, authenticated;
-grant select on campaigns to anon, authenticated;
+-- Private: the dashboard reads through the signed-in API (backend, service key), never with the public key.
+revoke select on leads_public, calls_public from anon, authenticated;
+revoke select on campaigns from anon, authenticated;
 drop policy if exists "public read campaigns" on campaigns;
-create policy "public read campaigns" on campaigns for select using (true);
 
 -- 6. Storage bucket for call recordings (private; n8n uploads with the service key)
 insert into storage.buckets (id, name, public)
