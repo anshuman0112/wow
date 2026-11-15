@@ -544,7 +544,7 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
             use_lang = "hi" if lang == "hi" else (out.get("lang") or lang)   # the lead's detected Hinglish wins
             out["lang"] = use_lang
             raw_reply = out["reply"]
-            out["reply"] = faq.keep_language(faq.guard(out["reply"], messages, use_lang), use_lang)
+            out["reply"] = faq.keep_language(faq.no_reask(faq.guard(out["reply"], messages, use_lang), messages, use_lang), use_lang)
             first = (name or "").split(" ")[0].lower()
             if key and not out.get("_cached") and out["reply"] == raw_reply and not out.get("end") and not (first and first in raw_reply.lower()):
                 _later(cache.set_reply(groq.http, key, speakable(raw_reply)))

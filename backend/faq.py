@@ -148,12 +148,17 @@ def covered(messages: list[dict]) -> set[str]:
                 break
     if re.search(r"invest|weekend|self.?use|family|own use|khud|apne liye|rehne", lead):
         c.add("intent")
-    if re.search(r"lakh|lac|crore|budget", lead):
+    if re.search(r"lakh|lac|crore|budget|(range|price|pricing) (works|is fine|is ok|is okay|is good|suits)|affordable|"
+                 r"(that|it) (works|fits) (for me|in my budget)", lead):
         c.add("budget")
-    if re.search(r"nandi|devanahalli|location (is )?(fine|ok)|far|door", lead) or re.search(r"comfortable with the nandi|area.*theek", aanya) and len(messages) > 6:
+    if re.search(r"nandi|devanahalli|north bangalore|north bengaluru|(location|area|place|side|corridor|airport)"
+                 r".{0,25}(fine|ok|okay|good|works|comfortable|no problem)|comfortable with (the )?(location|area|place)|far|door", lead) or re.search(r"comfortable with the nandi|area.*theek", aanya) and len(messages) > 6:
         c.add("geography")
-    if re.search(r"2029|possession|timeline|no hurry|ready to move", lead):
+    if re.search(r"2029|possession|timeline|no hurry|no rush|can wait|ready to move|december .{0,20}(fine|ok|okay|works)", lead):
         c.add("timeline")
+    if re.search(r"(my )?(wife|husband|spouse|partner|parents|family|brother|sister).{0,30}(decide|decision|together|and i|with me)|"
+                 r"(i|me) (alone|myself)|i (will )?decide|just me|only me|no one else", lead):
+        c.add("decision")
     # Only the real lifestyle pitch counts — listing "74% open space" among amenities is not the pitch.
     if re.search(r"private valley|like-minded|like minded", aanya):
         c.add("pitch")
@@ -328,6 +333,16 @@ def keep_language(reply: str, lang: str) -> str:
         if q.get("en") and q["en"] in reply and q.get("hi"):
             return reply.replace(q["en"], q["hi"])
     return reply
+
+
+def no_reask(reply: str, messages: list[dict], lang: str) -> str:
+    """PDF: "avoid re-asking questions if the user provides info early". Drop any question in the reply about a
+    checkpoint the lead has already answered; respond() then adds the next unanswered one."""
+    done = covered(messages)
+    sentences = re.split(r"(?<=[.!?])\s+", reply.strip())
+    keep = [x for x in sentences if not (x.endswith("?") and any(
+        step in done and re.search(ASKED[step], x.lower()) for step in ("intent", "geography", "budget", "timeline", "decision")))]
+    return " ".join(keep) if keep else reply
 
 
 def guard(reply: str, messages: list[dict], lang: str) -> str:
