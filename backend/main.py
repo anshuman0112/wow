@@ -614,6 +614,23 @@ async def twilio_media_stream(ws: WebSocket):
     await stream_agent.handle(ws)
 
 
+# ── ConversationRelay engine: Twilio does speech↔text, we stream the reply word by word ─────
+@app.post("/api/phone/relay-start")
+async def phone_relay_start(request: Request, lead: str = Query(default="", max_length=64), cb: int = 0,
+                            http: httpx.AsyncClient = Depends(http_client)):
+    from . import relay_agent
+    form = await twilio_form(request)
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    return _xml(await relay_agent.start(http, form.get("CallSid", ""), _uuid_or_blank(lead), f"wss://{host}/ws/relay",
+                                        callback=bool(cb)))
+
+
+@app.websocket("/ws/relay")
+async def twilio_conversation_relay(ws: WebSocket):
+    from . import relay_agent
+    await relay_agent.handle(ws)
+
+
 # ── Sign-in ─────────────────────────────────────────────────────────────────
 class LoginReq(BaseModel):
     email: str = Field(max_length=200)

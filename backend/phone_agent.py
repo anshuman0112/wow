@@ -302,6 +302,76 @@ async def think(groq: Groq, messages: list[dict], name: str | None = None, locat
     return out
 
 
+async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -> dict | None:
+    """Instant answers that need no AI (0 tokens, a few ms): slot confirmation, objections, FAQ cache."""
+    speech = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
+    intents = faq.detect(speech)
+    t0 = time.perf_counter()
+    slot = faq.slot_confirmation(messages, lang)
+    if slot:   # the lead chose the Property Expert time: confirm it back exactly and close politely
+        return {"reply": slot, "end": True, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "rule:slot-confirm", "prompt_tokens": 0, "completion_tokens": 0}}
+    objection = faq.budget_objection(messages, lang) or faq.location_objection(messages, lang)
+    if objection:   # objections first: "it's too far from my office" must be countered, not answered as a FAQ
+        low = objection.lower()
+        return {"reply": objection, "end": "have a lovely day" in low or "din shubh" in low, "lang": lang,
+                "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "rule:objection", "prompt_tokens": 0, "completion_tokens": 0}}
+    if intents:
+        # FAQ answers come from the campaign facts (built in memory, ~0 ms). Redis is asked first, but
+        # only waited on briefly, so a slow network can never delay the answer; the most-asked counter
+        # is updated without holding up the reply.
+        try:
+            hits = await asyncio.wait_for(asyncio.gather(*(cache.get_faq(http, i, lang) for i in intents)), REDIS_WAIT_S)
+        except asyncio.TimeoutError:
+            hits = [None] * len(intents)
+        cached = {i: h for i, h in zip(intents, hits) if h}
+        _later(cache.count_faq(http, intents), *(cache.set_faq(http, i, lang, faq.answer([i], lang)) for i in intents if i not in cached))
+        nxt = faq.next_question(messages, lang)
+        if "price" in intents and "lakh" in nxt.lower():   # price just answered: don't repeat it in the budget question
+            nxt = "Would that range work for you?" if lang == "en" else "Kya yeh range aapke liye theek hai?"
+        reply = f"{faq.answer(intents, lang, cached)} {nxt}"
+        return {"reply": reply, "end": False, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "faq-cache" + ("+redis" if cache.fast_enough() else ""), "prompt_tokens": 0,
+                           "completion_tokens": 0, "intents": intents, "redis_hits": len(cached)}}
+    return None
+
+
+REDIS_WAIT_S = 0.08   # on the hot path, Redis gets 80 ms at most (same region: ~5-20 ms); otherwise we go on without it
+_BACKGROUND: set = set()
+
+
+def _later(*coros) -> None:
+    """Fire-and-forget for non-essential writes (analytics, cache warming): never delays the reply."""
+    for c in coros:
+        t = asyncio.ensure_future(c)
+        _BACKGROUND.add(t)
+        t.add_done_callback(_BACKGROUND.discard)
+
+
+async def cached_reply(http: httpx.AsyncClient, key: str | None) -> str | None:
+    if not key:
+        return None
+    try:
+        return await asyncio.wait_for(cache.get_reply(http, key), REDIS_WAIT_S)
+    except asyncio.TimeoutError:
+        return None
+
+
+def reply_key(messages: list[dict], lang: str) -> str | None:
+    """Redis reply-cache key: the same short answer, to the same question, at the same checkpoint, in the same
+    language gets the same reply. Only short lead answers ("yes", "it's for investment") are cached."""
+    import hashlib
+    from . import config_store
+    speech = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
+    words = re.sub(r"[^a-z0-9 ]", " ", speech.lower()).split()
+    if not words or len(words) > 8:
+        return None
+    asked = next((m["text"] for m in reversed(messages[:-1]) if m["role"] == "assistant"), "")
+    state = f"{config_store.version}|{lang}|{','.join(sorted(faq.covered(messages[:-1])))}|{asked.strip().lower()}|{' '.join(words)}"
+    return "reply:" + hashlib.sha256(state.encode()).hexdigest()[:24]
+
+
 async def respond(groq: Groq, messages: list[dict], name: str | None, location: str | None, lang: str) -> dict:
     """One conversational step for live calls AND the evaluator.
 
@@ -310,39 +380,27 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     """
     speech = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
     lang = faq.lang_of(speech, lang)
-    intents = faq.detect(speech)
     t0 = time.perf_counter()
-    slot = faq.slot_confirmation(messages, lang)
-    if slot:   # the lead chose the Property Expert time: confirm it back exactly and close politely
-        print(f"[phone] slot confirmed", flush=True)
-        return {"reply": slot, "end": True, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
-                "_usage": {"model": "rule:slot-confirm", "prompt_tokens": 0, "completion_tokens": 0}}
-    objection = faq.budget_objection(messages, lang) or faq.location_objection(messages, lang)
-    if objection:   # objections first: "it's too far from my office" must be countered, not answered as a FAQ
-        low = objection.lower()
-        out = {"reply": objection, "end": "have a lovely day" in low or "din shubh" in low, "lang": lang,
-               "_latency_s": round(time.perf_counter() - t0, 3),
-               "_usage": {"model": "rule:objection", "prompt_tokens": 0, "completion_tokens": 0}}
-    elif intents:
-        http = groq.http
-        cached = {}
-        for i in intents:
-            hit = await cache.get_faq(http, i, lang)
-            if hit:
-                cached[i] = hit
-            else:
-                await cache.set_faq(http, i, lang, faq.answer([i], lang))   # warm the cache
-        await cache.count_faq(http, intents)
-        reply = f"{faq.answer(intents, lang, cached)} {faq.next_question(messages, lang)}"
-        out = {"reply": reply, "end": False, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
-               "_usage": {"model": "faq-cache" + ("+redis" if cache.fast_enough() else ""), "prompt_tokens": 0,
-                          "completion_tokens": 0, "intents": intents, "redis_hits": len(cached)}}
-    else:
-        out = await think(groq, messages, name, location, lang)
-        if out.get("reply"):
+    out = await rule_reply(groq.http, messages, lang)
+    if out and out.get("_final"):
+        return out
+    if not out:   # nothing instant: Redis reply cache, then the AI
+        key = reply_key(messages, lang)
+        hit = await cached_reply(groq.http, key)
+        if hit:   # Redis reply cache: answered before in exactly this situation → no AI call
+            out = {"reply": hit, "end": False, "lang": lang, "_cached": True,
+                   "_latency_s": round(time.perf_counter() - t0, 3),
+                   "_usage": {"model": "reply-cache+redis", "prompt_tokens": 0, "completion_tokens": 0}}
+        else:
+            out = await think(groq, messages, name, location, lang)
+        if out.get("reply"):   # guardrails apply to cached replies too
             use_lang = "hi" if lang == "hi" else (out.get("lang") or lang)   # the lead's detected Hinglish wins
             out["lang"] = use_lang
+            raw_reply = out["reply"]
             out["reply"] = faq.keep_language(faq.guard(out["reply"], messages, use_lang), use_lang)
+            first = (name or "").split(" ")[0].lower()
+            if key and not out.get("_cached") and out["reply"] == raw_reply and not out.get("end") and not (first and first in raw_reply.lower()):
+                _later(cache.set_reply(groq.http, key, speakable(raw_reply)))
         else:   # every model rate-limited/failed: answer from the script instead of "say that once more"
             fb = faq.fallback_reply(messages, lang)
             out.update({"reply": fb, "end": bool(re.search(r"have a lovely day|aapke time ke liye dhanyavaad", fb.lower())), "lang": lang,

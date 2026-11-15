@@ -67,6 +67,9 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str, callback: bool = Fals
         base = s.public_base_url
         if s.phone_line == "twilio-sip":      # paid Twilio: bridge into Vapi's SIP line
             url = f"{base}/api/twiml{q}"
+        elif s.phone_line == "twilio-relay":   # ConversationRelay: replies spoken word by word
+            base = s.stream_base_url
+            url = f"{base}/api/phone/relay-start{q}"
         elif s.phone_line == "twilio-stream":  # live audio streaming (lowest latency), on the always-on server
             base = s.stream_base_url
             url = f"{base}/api/phone/stream-start{q}"

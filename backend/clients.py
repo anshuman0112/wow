@@ -205,6 +205,55 @@ class Groq:
 
     last_usage: dict | None = None
 
+    async def stream_text(self, messages: list[dict], max_tokens: int = 250):
+        """Word-by-word reply (Server-Sent Events). Yields text pieces as Groq writes them.
+        Model choice is quota-aware like chat_json; we only switch model BEFORE the first word arrives."""
+        need = sum(len(m.get("content") or "") for m in messages) // 4 + max_tokens
+        attempts: list[dict] = []
+        self.last_usage = {"model": "in-progress", "attempts": attempts}
+        for model in self._order(need):
+            body = {"model": model, "temperature": 0.3, "max_completion_tokens": max_tokens, "messages": messages,
+                    "stream": True, "stream_options": {"include_usage": True}}
+            if model.startswith("openai/gpt-oss"):
+                body["reasoning_effort"] = "low"
+            t0 = time.perf_counter()
+            first = None
+            try:
+                async with self.http.stream("POST", "https://api.groq.com/openai/v1/chat/completions", json=body,
+                                            headers=self.h, timeout=httpx.Timeout(4.0, connect=1.0)) as r:
+                    _note_quota(model, r)
+                    if r.status_code != 200:
+                        await r.aread()
+                        attempts.append({"model": model, "status": r.status_code, "ms": round((time.perf_counter() - t0) * 1000),
+                                         "why": r.text[:90]})
+                        continue
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data: ") or line == "data: [DONE]":
+                            continue
+                        j = json.loads(line[6:])
+                        u = (j.get("x_groq") or {}).get("usage") or j.get("usage")
+                        if u:
+                            self.last_usage.update({"prompt_tokens": u.get("prompt_tokens"),
+                                                    "cached_tokens": (u.get("prompt_tokens_details") or {}).get("cached_tokens"),
+                                                    "completion_tokens": u.get("completion_tokens"),
+                                                    "queue_s": round(float(u.get("queue_time") or 0), 2)})
+                        piece = ((j.get("choices") or [{}])[0].get("delta") or {}).get("content")
+                        if piece:
+                            if first is None:
+                                first = round((time.perf_counter() - t0) * 1000)
+                            yield piece
+                    attempts.append({"model": model, "status": 200, "first_word_ms": first,
+                                     "ms": round((time.perf_counter() - t0) * 1000)})
+                    self.last_usage["model"] = model
+                    return
+            except httpx.HTTPError as e:
+                attempts.append({"model": model, "status": type(e).__name__, "ms": round((time.perf_counter() - t0) * 1000)})
+                if first is not None:   # words were already spoken: don't start over with another model
+                    self.last_usage["model"] = model
+                    return
+                continue
+        self.last_usage["model"] = "none"
+
 
 def _loose_json(text: str) -> dict:
     """The model's JSON reply, tolerating extra text around it; plain text becomes the reply itself."""

@@ -144,3 +144,23 @@ async def set_quota(http: httpx.AsyncClient) -> None:
             await _cmd(http, "SET", "groq:quota", json.dumps(QUOTA), "EX", 120)
         except httpx.HTTPError:
             pass
+
+
+REPLY_TTL = 60 * 60 * 24 * 7   # a week; the key includes the Settings version, so edits start fresh
+
+
+async def get_reply(http: httpx.AsyncClient, key: str) -> str | None:
+    if not fast_enough():
+        return None
+    try:
+        return await _cmd(http, "GET", key)
+    except httpx.HTTPError:
+        return None
+
+
+async def set_reply(http: httpx.AsyncClient, key: str, reply: str) -> None:
+    if fast_enough() and reply:
+        try:
+            await _cmd(http, "SET", key, reply, "EX", REPLY_TTL)
+        except httpx.HTTPError:
+            pass

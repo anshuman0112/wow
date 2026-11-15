@@ -70,6 +70,8 @@ class Settings:
         if self.twilio_sid and self.twilio_token and self.twilio_number:
             if self.twilio_mode == "sip" and self.vapi_sip_uri:
                 return "twilio-sip"
+            if self.twilio_mode == "relay" and self.stream_base_url:
+                return "twilio-relay"     # ConversationRelay: word-by-word replies (always-on server)
             if self.twilio_mode == "stream" and self.stream_base_url and self.elevenlabs_key:
                 return "twilio-stream"
             return "twilio-gather"
