@@ -162,9 +162,13 @@ async def apply_lead_update(sb: Supabase, row: dict, groq: "Groq | None" = None)
     patch = {"status": "do_not_call" if row.get("do_not_call") else ("no_answer" if no_answer else "called"),
              "last_called_at": row.get("ended_at") or datetime.now(timezone.utc).isoformat()}
     if not no_answer:
-        for k in ("interest", "callback_time", "score", "next_action", "decision_maker"):
+        for k in ("interest", "callback_time", "next_action", "decision_maker"):
             if row.get(k):
                 patch[k] = row[k]
+        if row.get("score") is not None:   # 0 is a real score; score and Hot/Warm/Cold must always come together
+            patch["score"] = row["score"]
+            if row.get("interest"):
+                patch["interest"] = row["interest"]
     filters = {"id": f"eq.{row['lead_id']}"} if row.get("lead_id") else {"phone": f"eq.{row['phone']}"}
     if not no_answer and groq is not None and patch["status"] != "do_not_call":
         # Busy lead who asked to be called back → schedule the automatic call-back.

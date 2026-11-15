@@ -676,6 +676,56 @@ async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: s
     return "answered" if moved else "redirect-failed"
 
 
+def rule_analysis(messages: list[dict]) -> dict:
+    """Lead profile read straight from the conversation (no AI): which checkpoints the lead answered, how,
+    and the Property Expert time they gave. Used when the AI analysis is unavailable."""
+    lead = " ".join(m["text"] for m in messages if m["role"] == "user")
+    low = lead.lower()
+    done = faq.covered(messages)
+    if not low.strip():
+        return {"summary": "No conversation (the lead did not speak).", "intent": "unknown", "sentiment_end": "neutral",
+                "next_action": "Try again later", "language": "en", "source": "rules"}
+    if re.search(r"\bboth\b", low):
+        intent = "Both (self-use and investment)"
+    elif re.search(r"invest", low):
+        intent = "Investment"
+    elif re.search(r"weekend|self.?use|own use|live|stay|family", low):
+        intent = "Self-use (weekend home)"
+    else:
+        intent = "unknown"
+    objects = lambda pat: bool(re.search(pat, low))  # noqa: E731
+    geo = "No - finds it far" if objects(r"\btoo far\b|\bfar\b|not comfortable with the (area|location)") else \
+        ("Yes - comfortable with the location" if "geography" in done else "unknown")
+    budget = "Stretch - budget below the entry price" if faq.budget_lakh(lead) and faq.budget_lakh(lead) < faq.ENTRY_LAKH else \
+        ("Yes - the range works" if "budget" in done else "unknown")
+    timeline = "No - wants ready to move" if objects(r"ready to move|immediate") else \
+        ("Yes - December 2029 is fine" if "timeline" in done else "unknown")
+    decider = "spouse" if objects(r"\b(wife|husband|spouse)\b") else "family" if objects(r"\b(family|parents)\b") else \
+        "self" if objects(r"just me|only me|no one|myself|i (will )?decide") else "unknown"
+    slot = ""
+    for m in messages:
+        if m["role"] == "user":
+            hit = faq.SLOT.search(m["text"])
+            if hit and re.search(r"\d|morning|evening|afternoon", m["text"], re.I):
+                slot = faq._complete_slot(re.sub(r"\s+", " ", hit.group(1)).strip(), m["text"])
+    noted = next((re.search(r"have noted (.+?) for your call|maine (.+?) property expert", m["text"], re.I)
+                  for m in reversed(messages) if m["role"] == "assistant" and re.search(r"have noted|note kar liya", m["text"], re.I)), None)
+    if noted and not slot:   # Divya confirmed the time out loud: that is the booked slot
+        slot = (noted.group(1) or noted.group(2) or "").strip()
+    not_interested = objects(r"not interested|don'?t call|no thanks")
+    answered = sum(1 for v in (geo, budget, timeline) if v.startswith("Yes")) + (intent != "unknown")
+    summary = (f"The lead answered {answered} of 4 checkpoints (intent: {intent}; location: {geo.split(' - ')[0].lower()}; "
+               f"budget: {budget.split(' - ')[0].lower()}; timeline: {timeline.split(' - ')[0].lower()})"
+               + (f" and booked a Property Expert call for {slot}." if slot else ".")
+               + (" They said they are not interested." if not_interested else ""))
+    return {"summary": summary, "intent": intent, "geography_fit": geo, "budget_fit": budget, "timeline_fit": timeline,
+            "decision_maker": decider, "callback_time": slot or None, "do_not_call": objects(r"don'?t call"),
+            "sentiment_start": "neutral", "sentiment_end": "negative" if not_interested else ("positive" if slot else "neutral"),
+            "language": "hi" if faq.lang_of(lead, "en") == "hi" else "en",
+            "next_action": f"Property Expert call {slot}" if slot else ("Close - not interested" if not_interested else "Follow up"),
+            "objections": [], "source": "rules (AI analysis was unavailable)"}
+
+
 async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "customer-ended-call",
                  duration: float | None = None) -> dict:
     """Analyse the conversation (same schema as Vapi calls), save it and update the lead. Idempotent."""
@@ -704,6 +754,8 @@ async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "cu
             {"role": "user", "content": transcript or "(no conversation)"}], max_tokens=900)
     except Exception:  # noqa: BLE001
         q = {}
+    if not (q.get("summary") or q.get("intent")):
+        q = rule_analysis(messages)   # the AI was busy (free quota): never save a wrong "Cold, 0"
     ended = datetime.now(timezone.utc)
     started = row.get("started_at")
     if duration is None and started:
