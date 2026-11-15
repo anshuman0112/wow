@@ -2,7 +2,7 @@
 import { config, isLive } from '../config.js';
 import { voices, voiceConfig, browserVoice } from '../campaign-data.js';
 import { getCalls, getLeads } from '../store.js';
-import { esc, icon, toast, statusBadge } from '../ui.js';
+import { esc, icon, toast, statusBadge, interestBadge } from '../ui.js';
 
 export default async function talk(el, [leadId] = []) {
   const live = isLive.vapi();
@@ -48,7 +48,15 @@ export default async function talk(el, [leadId] = []) {
         </div>
       </section>
       <section class="card">
-        <div class="card-head"><h2>Live transcript</h2><span class="muted small" id="turns"></span></div>
+        <div class="card-head"><h2>Live score</h2><span class="muted small" id="live-note">updates after each answer</span></div>
+        <div class="card-pad" id="live-score">
+          <div class="row" style="gap:10px"><span class="mono" id="ls-num" style="font-size:28px;font-weight:650">0</span><span class="muted">/100</span>
+            <span class="spacer"></span><span id="ls-tier"></span></div>
+          <div style="height:8px;border-radius:6px;background:var(--border);margin:8px 0 10px;overflow:hidden">
+            <div id="ls-bar" style="height:100%;width:0%;background:var(--brand, #2f6b4f);transition:width .4s"></div></div>
+          <div class="stack small" id="ls-rows" style="gap:4px"><span class="muted">Start a call: the score fills in as the lead answers.</span></div>
+        </div>
+        <div class="card-head" style="border-top:1px solid var(--border)"><h2>Live transcript</h2><span class="muted small" id="turns"></span></div>
         <div class="transcript" id="tx" aria-live="polite" style="min-height:320px;max-height:560px;overflow-y:auto">
           <div class="empty" id="tx-empty">The conversation will appear here.</div>
         </div>
@@ -94,7 +102,33 @@ export default async function talk(el, [leadId] = []) {
     if (last && last.partial && last.role === role) { last.text = text; last.partial = partial; }
     else transcript.push({ role, text, partial });
     renderTx();
+    if (!partial && role === 'user') queueLiveScore();
   };
+
+  // Live score: after each finished lead answer, score the conversation so far (same rules as the final profile).
+  let lsTimer = null, lsBusy = false, lsAgain = false;
+  const queueLiveScore = () => { clearTimeout(lsTimer); lsTimer = setTimeout(runLiveScore, 1200); };
+  async function runLiveScore() {
+    if (lsBusy) { lsAgain = true; return; }
+    lsBusy = true;
+    try {
+      const r = await fetch(`${config.apiBaseUrl}/score/live`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: transcript.filter(m => !m.partial).map(m => ({ role: m.role, text: m.text })) }) });
+      if (r.ok) paintScore(await r.json());
+    } catch {}
+    lsBusy = false;
+    if (lsAgain) { lsAgain = false; queueLiveScore(); }
+  }
+  function paintScore(s) {
+    if (!$('ls-num')) return;
+    $('ls-num').textContent = s.score; $('ls-bar').style.width = `${s.score}%`;
+    $('ls-tier').innerHTML = interestBadge(s.tier);
+    const mark = r => r.key === 'tone' ? '◑' : r.verdict === 'yes' ? '✅' : r.verdict === 'partial' ? '◐' : r.verdict === 'no' ? '✖️' : '·';
+    $('ls-rows').innerHTML = (s.breakdown || []).map(r => `<div class="row" style="gap:8px;flex-wrap:nowrap"><span>${mark(r)}</span>
+      <span style="flex:1">${esc(r.label)}${r.evidence ? ` <span class="muted">“${esc(r.evidence)}”</span>` : ''}</span>
+      <span class="mono">${r.points > 0 ? '+' : ''}${r.points}</span></div>`).join('')
+      + ((s.hot_blocked_by || []).length ? `<div class="muted">Not Hot yet: needs ${esc(s.hot_blocked_by.join(', '))}</div>` : '');
+  }
 
   async function startLive() {
     setState('connecting');

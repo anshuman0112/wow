@@ -272,6 +272,44 @@ async def google_leads(request: Request, http: httpx.AsyncClient = Depends(http_
     return {"ok": True, **res}
 
 
+# ── Live score during a browser call ─────────────────────────────────────────
+class LiveScoreReq(BaseModel):
+    messages: list[dict] = Field(max_length=80)
+
+
+LIVE_FIELDS = ("intent", "geography_fit", "budget_fit", "timeline_fit", "decision_maker", "callback_time",
+               "sentiment_end", "do_not_call", "evidence")
+
+
+@app.post("/api/score/live")
+async def live_score(req: LiveScoreReq, request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    """Score the conversation so far (same rules as the final profile). Talk page calls it after each lead turn."""
+    from . import cache, scoring
+    from .campaign import LEAD_ANALYSIS_OUTPUT
+    if cache.enabled():   # protects the free AI quota
+        key = f"livescore:{_client_ip(request)}"
+        n = int(await cache._cmd(http, "INCR", key) or 0)
+        if n == 1:
+            await cache._cmd(http, "EXPIRE", key, 3600)
+        if n > 120:
+            raise HTTPException(429, "Live score limit reached for this hour.")
+    msgs = [m for m in req.messages if str(m.get("text") or "").strip()][-40:]
+    if not any(m.get("role") == "user" for m in msgs):
+        return {"score": 0, "tier": "cold", "breakdown": [], "hot_blocked_by": []}
+    transcript = "\n".join(("Lead: " if m.get("role") == "user" else "Divya: ") + str(m["text"])[:400] for m in msgs)
+    props = LEAD_ANALYSIS_OUTPUT["schema"]["properties"]
+    desc = "\n".join(f"- {k}: {props[k].get('description', '')}{' One of ' + str(props[k]['enum']) if 'enum' in props[k] else ''}"
+                     for k in LIVE_FIELDS if k in props)
+    try:
+        q = await Groq(http).chat_json([
+            {"role": "system", "content": "You score an IN-PROGRESS real-estate sales call. Use 'Not discussed' for anything "
+                                          "not talked about yet. Reply with JSON only, with these fields:\n" + desc},
+            {"role": "user", "content": transcript}], max_tokens=350)
+    except Exception:  # noqa: BLE001 — a missed live update is fine; the final profile is computed after the call
+        raise HTTPException(503, "Live score unavailable right now") from None
+    return scoring.compute(q, scoring.rules())
+
+
 # ── Hand-off to the sales team ───────────────────────────────────────────────
 def _require_pin(x_admin_pin: str | None) -> None:
     pin = _admin_pin()
