@@ -787,6 +787,9 @@ async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "cu
         **scoring.profile_fields(q, scoring.rules()),   # score 0-100 + reasons, objections, decider, next action
         "messages": messages, "raw": row.get("raw"),
     }
+    rec = await cache.get_text(http, f"rec:{call_sid}")
+    if rec:
+        update["recording_url"] = rec
     update = {k: v for k, v in update.items() if v is not None}
     await sb.update("calls", {"vapi_call_id": f"eq.{_sid_key(call_sid)}"}, update)
     status = await apply_lead_update(sb, {**update, "lead_id": row.get("lead_id"), "vapi_call_id": _sid_key(call_sid)}, groq)

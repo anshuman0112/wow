@@ -87,13 +87,21 @@ class Twilio:
         self.http, self.sid = http, s.twilio_sid
         self.auth = (s.twilio_sid, s.twilio_token)
 
-    async def call(self, to: str, from_: str, twiml_url: str, status_callback: str | None = None) -> dict:
+    async def call(self, to: str, from_: str, twiml_url: str, status_callback: str | None = None,
+                   recording_callback: str | None = None) -> dict:
         # Trial accounts may not send TwiML inline, so Twilio fetches it from our API (Url).
         url = f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}/Calls.json"
         data = {"To": to, "From": from_, "Url": twiml_url}
         if status_callback:
             data |= {"StatusCallback": status_callback, "StatusCallbackEvent": "completed"}
+        if recording_callback:   # record the whole call; Twilio tells us when the MP3 is ready
+            data |= {"Record": "true", "RecordingChannels": "mono", "RecordingStatusCallback": recording_callback,
+                     "RecordingStatusCallbackEvent": "completed"}
         r = await self.http.post(url, data=data, auth=self.auth)
+        if r.status_code == 400 and recording_callback and "record" in r.text.lower():
+            # The account refused recording: place the call without it (the transcript is still saved).
+            data = {k: v for k, v in data.items() if not k.startswith(("Record", "RecordingStatus"))}
+            r = await self.http.post(url, data=data, auth=self.auth)
         if r.status_code == 400 and status_callback and "parameter" in r.text.lower():
             # Trial accounts restrict some parameters — retry with the bare minimum.
             r = await self.http.post(url, data={"To": to, "From": from_, "Url": twiml_url}, auth=self.auth)

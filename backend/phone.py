@@ -75,7 +75,8 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str, callback: bool = Fals
             url = f"{base}/api/phone/stream-start{q}"
         else:                                 # free trial: Twilio speech + Python conversation loop
             url = f"{base}/api/phone/start{q}"
-        res = await Twilio(http).call(lead["phone"], s.twilio_number, url, status_callback=f"{base}/api/phone/status{q}")
+        res = await Twilio(http).call(lead["phone"], s.twilio_number, url, status_callback=f"{base}/api/phone/status{q}",
+                                      recording_callback=f"{s.public_base_url}/api/phone/recording")
         await dialled()
         return {"ok": True, "via": s.phone_line, "id": res.get("sid")}
     except Exception as e:

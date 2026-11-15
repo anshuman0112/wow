@@ -582,6 +582,30 @@ async def phone_next(request: Request, n: int = 0, http: httpx.AsyncClient = Dep
     return _xml(xml or '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>')
 
 
+@app.post("/api/phone/recording")
+async def phone_recording(request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    """Twilio finished recording a call: store the MP3 in Supabase Storage and link it to the call."""
+    from . import cache
+    from .clients import Twilio
+    form = await twilio_form(request)
+    sid, rec_url = form.get("CallSid", ""), form.get("RecordingUrl", "")
+    if not (sid and rec_url and form.get("RecordingStatus", "completed") == "completed"):
+        return {"saved": False, "reason": form.get("RecordingStatus")}
+    r = await http.get(rec_url + ".mp3", auth=Twilio(http).auth, timeout=httpx.Timeout(60.0, connect=10.0),
+                       follow_redirects=True)
+    if r.is_error:
+        return {"saved": False, "reason": f"download {r.status_code}"}
+    sb = Supabase(http)
+    path = f"twilio/{sid}.mp3"
+    await sb.upload("recordings", path, r.content, "audio/mpeg")
+    link = await sb.signed_url("recordings", path, 31_536_000)   # 1-year playback link
+    patch = {"recording_url": link, "storage_path": f"recordings/{path}"}
+    await sb.update("calls", {"vapi_call_id": f"eq.tw_{sid}"}, patch)
+    await cache.put_text(http, f"rec:{sid}", link, 3600)   # in case the call row is written after this
+    print(f"[recording] saved {sid[-6:]} {len(r.content) // 1024} KB", flush=True)
+    return {"saved": True, "kb": len(r.content) // 1024}
+
+
 @app.post("/api/phone/status")
 async def phone_status(request: Request, lead: str = Query(default="", max_length=64), cb: int = 0,
                        http: httpx.AsyncClient = Depends(http_client)):

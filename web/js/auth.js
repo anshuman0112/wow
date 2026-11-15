@@ -20,7 +20,15 @@ window.fetch = async (input, init = {}) => {
   const ours = url.startsWith(config.apiBaseUrl) || url.startsWith('/api/');
   const s = session();
   if (ours && s?.token) init = { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${s.token}` } };
-  const res = await realFetch(input, init);
+  let res;
+  const method = (init.method || 'GET').toUpperCase();
+  for (let attempt = 0; ; attempt++) {
+    try { res = await realFetch(input, init); break; }
+    catch (e) {   // network blip ("Failed to fetch"): retry reads twice, quickly
+      if (!ours || method !== 'GET' || attempt >= 2) throw e;
+      await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
   if (ours && res.status === 401 && signedIn() && !url.includes('/auth/login')) {
     try { localStorage.removeItem(KEY); } catch {}
     location.reload();
