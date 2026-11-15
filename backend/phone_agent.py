@@ -277,6 +277,24 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     messages = row.setdefault("messages", [])
     raw = row.setdefault("raw", {})
 
+    # The same words delivered twice (a network retry, or two copies at the same moment) are answered ONCE:
+    # the copy gets the reply already given. A genuinely repeated answer can't arrive this fast, because the
+    # lead first has to hear Divya's reply.
+    fp = ""
+    if speech.strip() and not silence:
+        import hashlib
+        fp = hashlib.sha1(speech.strip().lower().encode()).hexdigest()[:12]
+        lr = raw.get("last_reply") or {}
+        if lr.get("fp") == fp and time.time() - lr.get("t", 0) < DUPLICATE_WINDOW_S:
+            return lr["xml"]
+        if not await cache.claim(http, f"say:{call_sid}:{fp}:{len(messages)}", 60):
+            for _ in range(40):   # the other copy is being answered right now: hand back its reply
+                await asyncio.sleep(0.1)
+                lr = ((await cache.get_session(http, call_sid)) or {}).get("raw", {}).get("last_reply") or {}
+                if lr.get("fp") == fp:
+                    return lr["xml"]
+            return twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), raw.get("instant", False))
+
     answer_now = False
     if (silence or not speech.strip()) and raw.get("pending"):
         speech, silence = raw.pop("pending"), False   # they stopped after all: answer what we heard
@@ -302,9 +320,12 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     # keep listening silently and join it with what they say next.
     if not answer_now and looks_unfinished(speech, raw.get("stt") == "nova3") and not raw.get("pending"):
         raw["pending"] = speech.strip()
+        xml = twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), raw.get("instant", False))
+        if fp:
+            raw["last_reply"] = {"fp": fp, "xml": xml, "t": time.time()}
         await save_session(http, sb, call_sid, row)
         print(f"[phone] unfinished, still listening: {speech.strip()[:60]!r}", flush=True)
-        return twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), raw.get("instant", False))
+        return xml
     if raw.get("pending"):
         speech = f"{raw.pop('pending')} {speech.strip()}"
     il = raw.get("instant_last")
@@ -341,16 +362,18 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     # can't be inside the record it writes, so the full total is printed to the server log below.
     usage["t_ms"] = {"load": round((t_loaded - t_in) * 1000), "reply": round((t_replied - t_loaded) * 1000),
                      "turn": len(messages) // 2}
+    xml = twiml_goodbye(reply, raw.get("voice")) if end else \
+        twiml_gather(reply, row.get("lead_id") or lead_id, raw["lang"], raw.get("voice"), raw.get("stt"), raw.get("instant", False))
+    if fp:
+        raw["last_reply"] = {"fp": fp, "xml": xml, "t": time.time()}
     await asyncio.gather(save_session(http, sb, call_sid, row), cache.set_quota(http))
     usage["t_ms"]["server_total"] = round((time.perf_counter() - t_in) * 1000)
     print(f"[latency] call={call_sid[-6:]} turn={usage['t_ms']['turn']} model={usage.get('model')} "
           f"load={usage['t_ms']['load']}ms reply={usage['t_ms']['reply']}ms total={usage['t_ms']['server_total']}ms "
           f"attempts={usage.get('attempts')}", flush=True)
-    if end:
-        if not cache.fast_enough():
-            await finish(http, call_sid, ended_reason="assistant-ended-call")
-        return twiml_goodbye(reply, raw.get("voice"))   # goodbye plays immediately; analysis happens after hang-up
-    return twiml_gather(reply, row.get("lead_id") or lead_id, raw["lang"], raw.get("voice"), raw.get("stt"), raw.get("instant", False))
+    if end and not cache.fast_enough():
+        await finish(http, call_sid, ended_reason="assistant-ended-call")
+    return xml   # a goodbye plays immediately; the analysis happens after hang-up
 
 
 _SPOKEN = str.maketrans({"’": "'", "‘": "'", "“": "", "”": "", "‑": "-", "‐": "-",
@@ -367,6 +390,7 @@ def speakable(text: str) -> str:
 # Twilio's trial announcement is sometimes transcribed as the lead's first words — it isn't them.
 TRIAL_NOISE = re.compile(r"no longer being recorded|trial account|press any key|free trial|twilio", re.I)
 
+DUPLICATE_WINDOW_S = 4   # same words again within this time = a delivery copy, not a new answer
 REPLY_BUDGET_S = 2.5   # max time we let the AI think on a live call before falling back to the script
 REPLY_MAX_TOKENS = 250  # replies are 1-2 sentences (+ a little reasoning); a smaller cap also uses less of the free per-minute quota
 HISTORY_WINDOW = 12   # last ~6 exchanges: enough context, bounded token cost on long calls
