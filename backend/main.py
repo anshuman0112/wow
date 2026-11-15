@@ -105,7 +105,9 @@ async def health(http: httpx.AsyncClient = Depends(http_client)):
 @app.get("/api/config")
 async def public_config():
     """What the dashboard needs to know (no secrets)."""
-    return {"phoneCalling": settings().phone_line != "none", "phoneLine": settings().phone_line}
+    import os
+    return {"phoneCalling": settings().phone_line != "none", "phoneLine": settings().phone_line,
+            "inboundNumber": os.environ.get("VAPI_INBOUND_NUMBER", "")}
 
 
 @app.get("/api/stats/faq")
@@ -580,6 +582,13 @@ async def _sync_browser_prompt(http: httpx.AsyncClient) -> bool:
         msgs[0] = {"role": "system", "content": render_prompt()}
         model["messages"] = msgs
         r = await http.patch(f"{Vapi.BASE}/assistant/{s.vapi_assistant_id}", headers=h, json={"model": model})
+        import os
+        inbound = os.environ.get("VAPI_INBOUND_ASSISTANT_ID", "")
+        if inbound:   # the inbound line asks the same questions
+            from .campaign import INBOUND_NOTE
+            im = (await http.get(f"{Vapi.BASE}/assistant/{inbound}", headers=h)).json().get("model") or {}
+            im["messages"] = [{"role": "system", "content": INBOUND_NOTE + render_prompt()}]
+            await http.patch(f"{Vapi.BASE}/assistant/{inbound}", headers=h, json={"model": im})
         return r.is_success
     except httpx.HTTPError:
         return False

@@ -96,6 +96,21 @@ async def find_lead_for_bridged_call(sb: Supabase) -> str | None:
     return rows[0]["id"] if rows else None
 
 
+async def lead_for_inbound_caller(sb: Supabase, row: dict) -> str | None:
+    """Someone called Divya's inbound number: match them by phone, or add them as a new lead (no duplicates)."""
+    from .leads import normalise_phone
+    phone = normalise_phone(row.get("phone"))
+    if not phone:
+        return None
+    found = await sb.select("leads", {"select": "id", "phone": f"eq.{phone}"})
+    if found:
+        return found[0]["id"]
+    saved = await sb.upsert("leads", [{"name": row.get("name") or None, "phone": phone, "source": "Inbound call",
+                                       "status": "new", "extra": {}, "campaign_id": settings().campaign_id}],
+                            "phone", ignore_duplicates=True, returning=True)
+    return (saved or await sb.select("leads", {"select": "id", "phone": f"eq.{phone}"}))[0]["id"]
+
+
 async def process_end_of_call(http: httpx.AsyncClient, msg: dict) -> dict:
     sb, vapi = Supabase(http), Vapi(http)
     call_id = (msg.get("call") or {}).get("id")
@@ -106,6 +121,8 @@ async def process_end_of_call(http: httpx.AsyncClient, msg: dict) -> dict:
     row = build_row(msg, call)
     if "lead_id" not in row and (call.get("type") or "").startswith("inbound"):
         lead_id = await find_lead_for_bridged_call(sb)
+        if not lead_id:
+            lead_id = await lead_for_inbound_caller(sb, row)
         if lead_id:
             row["lead_id"] = lead_id
     await sb.upsert("calls", row, "vapi_call_id")

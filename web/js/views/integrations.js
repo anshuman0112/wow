@@ -15,6 +15,7 @@ const items = [
 export default async function integrations(el) {
   let health = null, sources = null;
   try { sources = await (await fetch(`${config.apiBaseUrl}/leads/sources`)).json(); } catch {}
+  try { const pc = await (await fetch(`${config.apiBaseUrl}/config`)).json(); if (sources) sources.inbound = pc.inboundNumber; } catch {}
   try { health = await (await fetch(`${config.apiBaseUrl}/health`)).json(); } catch {}
   const c = health?.configured || {};
   const status = i => {
@@ -69,6 +70,8 @@ function sourcesSection(src) {
         `${test('meta', 'Facebook')}${test('instagram', 'Instagram')}`)}
       ${card('Google Ads lead forms', c.google, 'Key ready', 'Not set up', `${SITE}/api/leads/google`,
         'Paste this URL and your key (GOOGLE_ADS_KEY) into the lead form\'s webhook in Google Ads.', test('google'))}
+      ${card('Inbound phone line (24/7)', !!src.inbound, 'Live', 'Not set up', src.inbound || '',
+        'Leads can call Divya any time. She answers "Thank you for calling Divyasree Developers…", qualifies them the same way, and the caller is saved as a lead (source: Inbound call). A free Vapi US number; calls use Vapi credit and callers from India pay international rates.', '')}
       ${card('Google Forms, Typeform, any tool', true, 'Live', '', `${SITE}/api/leads/inbound`,
         'Any form or tool that can send JSON {name, phone, location, budget, source}. A ready Google Forms script is in docs/LEAD_SOURCES.md.', '')}
     </div>

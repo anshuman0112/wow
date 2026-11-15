@@ -19,6 +19,14 @@ def data() -> dict:
     return json.loads(CAMPAIGN_JSON.read_text(encoding="utf-8"))
 
 
+INBOUND_NOTE = """# INBOUND CALL (the lead called you)
+Your first line already greeted them and asked if they are calling about Whispers of the Wind. Do NOT ask for
+permission to speak. If you do not know their name, ask it once, naturally. Answer their question first, then
+follow the same flow below: the 4 checkpoints, the soft "who decides" question, the pitch, and the Property Expert call.
+
+"""
+
+
 def render_prompt() -> str:
     d = data()
     facts = 'Facts marked [web] come from public listings: for times and distances say "about" or "approximately".\n\n' + \
