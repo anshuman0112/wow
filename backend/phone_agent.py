@@ -397,6 +397,19 @@ REPLY_MAX_TOKENS = 250  # replies are 1-2 sentences (+ a little reasoning); a sm
 HISTORY_WINDOW = 12   # last ~6 exchanges: enough context, bounded token cost on long calls
 
 
+def call_memory(messages: list[dict]) -> str:
+    """A one-line memory of the WHOLE call (not just the recent turns the model sees): what the lead already
+    answered and what is still to ask, so the AI never re-asks and always knows where the call stands."""
+    done = faq.covered(messages)
+    order = ["intent", "geography", "budget", "timeline", "decision", "pitch", "callback"]
+    names = {"intent": "intent", "geography": "location", "budget": "budget", "timeline": "timeline",
+             "decision": "who decides", "pitch": "pitch", "callback": "expert-call time"}
+    said = " | ".join(m["text"][:80] for m in messages if m["role"] == "user")[-300:]
+    return (f"CALL MEMORY: covered = {', '.join(names[k] for k in order if k in done) or 'nothing yet'}; "
+            f"still to do = {', '.join(names[k] for k in order if k not in done) or 'close the call'}; "
+            f"lead said so far: {said or '-'}. Never ask a covered step again. ")
+
+
 def build_chat(messages: list[dict], name: str | None, location: str | None, lang: str = "en") -> list[dict]:
     """Cache-friendly order: the big system prompt is byte-identical on every turn of every call
     (so the provider can reuse its cached prefix); per-lead details come last, then a bounded history."""
@@ -406,6 +419,7 @@ def build_chat(messages: list[dict], name: str | None, location: str | None, lan
     return ([{"role": "system", "content": system_phone()}] +
             [{"role": "user" if m["role"] == "user" else "assistant", "content": m["text"]} for m in hist] +
             [{"role": "system", "content": f"Lead name: {name or 'unknown'}. Lead location: {location or 'unknown'}. "
+                                         + call_memory(messages)
                                          + ("The lead speaks Hindi/Hinglish: reply in simple Hinglish (English letters), lang=hi. " if lang == "hi" else "")
                                          + "Reply with the JSON object only."}])
 
