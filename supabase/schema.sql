@@ -1,4 +1,4 @@
--- Vaani · Supabase schema
+-- WOW Voice Agent · Supabase schema
 -- Run once in Supabase → SQL Editor → New query → paste → Run.
 --
 -- Security model:
@@ -13,7 +13,7 @@ create table if not exists campaigns (
   id              text primary key,                 -- e.g. 'divyasree-wow'
   name            text not null,
   client          text not null,
-  agent_name      text not null default 'Aanya',
+  agent_name      text not null default 'Divya',
   goal            text,
   vapi_assistant_id text,
   facts_md        text,                              -- published fact sheet
@@ -60,7 +60,7 @@ create table if not exists calls (
   recording_url   text,                              -- Vapi recording URL
   storage_path    text,                              -- copy in Supabase Storage
   transcript      text,                              -- full conversation, plain text
-  ai_lines        text,                              -- only what Aanya said
+  ai_lines        text,                              -- only what Divya said
   messages        jsonb,                             -- turn-by-turn
   summary         text,
   interest        text check (interest in ('hot','warm','cold')),
@@ -110,7 +110,7 @@ on conflict (id) do nothing;
 
 -- 7. Seed campaign #1
 insert into campaigns (id, name, client, agent_name, goal)
-values ('divyasree-wow', 'Whispers of the Wind', 'Divyasree Developers', 'Aanya',
+values ('divyasree-wow', 'Whispers of the Wind', 'Divyasree Developers', 'Divya',
         'Qualify the lead and book a follow-up call with a Property Expert')
 on conflict (id) do nothing;
 

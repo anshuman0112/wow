@@ -1,4 +1,4 @@
-"""Knowledge builder: any business document → clean fact sheet (to reuse Vaani for another client)."""
+"""Knowledge builder: any business document → clean fact sheet (to reuse WOW Voice Agent for another client)."""
 from __future__ import annotations
 
 from .clients import Groq, Supabase

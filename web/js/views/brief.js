@@ -19,10 +19,10 @@ const sections = [
     ['No re-asking if the user gave info early', 'System prompt checkpoint tracker; full history sent every turn', 'build'],
     ['Pronunciation guide: Divyasree, Nandi, Lakh, Crore', 'Campaign → Pronunciation guide (in system prompt)', 'done'],
     ['Tone: premium, conversational, non-intrusive', 'Persona + max 2-sentence replies', 'done'],
-    ['Holds a 2–3 minute conversation', 'First live call: 2 min 28 s, ended by Aanya after booking the callback', 'done'],
+    ['Holds a 2–3 minute conversation', 'First live call: 2 min 28 s, ended by Divya after booking the callback', 'done'],
   ]},
   { title: '3. Deliverables', items: [
-    ['Demo link — shareable working bot', 'https://vaani-divyasree.vercel.app → Talk to Aanya', 'done'],
+    ['Demo link — shareable working bot', 'https://vaani-divyasree.vercel.app → Talk to Divya', 'done'],
     ['Or recorded audio — at least 5 conversation flows', '6 scenarios to record on the live bot (Calls page keeps each recording)', 'todo'],
     ['System Prompt (PDF) with pronunciation dictionary', 'docs/System_Prompt.pdf (npm run pdf)', 'done'],
   ]},

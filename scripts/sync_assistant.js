@@ -92,7 +92,7 @@ async function main() {
   }
   await writeFile(stateFile, JSON.stringify(state, null, 2));
 
-  // Write the public key + assistant ID into the web app so "Talk to Aanya" goes live.
+  // Write the public key + assistant ID into the web app so "Talk to Divya" goes live.
   const cfgPath = path.join(root, 'web/js/config.js');
   let cfg = await readFile(cfgPath, 'utf8');
   cfg = cfg.replace(/vapiAssistantId: '[^']*'/, `vapiAssistantId: '${state.assistantId}'`);

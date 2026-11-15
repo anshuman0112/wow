@@ -1,4 +1,4 @@
-// Pulls the voices from your ElevenLabs library into the Vaani voice picker, with preview links.
+// Pulls the voices from your ElevenLabs library into the WOW Voice Agent voice picker, with preview links.
 //   npm run voices
 // The ElevenLabs SDK reads ELEVENLABS_API_KEY from the environment (loaded from .env by
 // `node --env-file=.env`). The key needs the "Voices → Read" permission.

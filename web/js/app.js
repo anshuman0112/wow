@@ -11,7 +11,7 @@ import integrations from './views/integrations.js';
 
 const routes = [
   { path: 'overview', label: 'Overview', icon: 'home', view: overview },
-  { path: 'talk', label: 'Talk to Aanya', icon: 'mic', view: talk },
+  { path: 'talk', label: 'Talk to Divya', icon: 'mic', view: talk },
   { path: 'voices', label: 'Phone voices', icon: 'play', view: voicesView },
   { path: 'leads', label: 'Leads', icon: 'users', view: leads },
   { path: 'calls', label: 'Calls', icon: 'history', view: calls },
@@ -45,7 +45,7 @@ async function router() {
     console.error(e);
     viewEl.innerHTML = `<div class="card card-pad"><h2>Something went wrong</h2><p class="muted" style="margin-top:6px">${String(e.message || e)}</p></div>`;
   }
-  document.title = `${route.label} · Vaani`;
+  document.title = `${route.label} · WOW`;
   viewEl.focus({ preventScroll: true });
 }
 

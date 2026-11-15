@@ -70,7 +70,7 @@ function openDrawer(c) {
           ${c.recording_url
             ? `<audio controls preload="none" src="${esc(c.recording_url)}" style="width:100%;margin-top:10px"></audio>`
             : c.call_type === 'twilioPhoneCall'
-              ? `<p class="muted small" style="margin-top:6px">Phone calls on the free Twilio trial can't be recorded (Twilio blocks recording on trial accounts), so the full transcript is below. Browser calls from <b>Talk to Aanya</b> are recorded and play here.</p>`
+              ? `<p class="muted small" style="margin-top:6px">Phone calls on the free Twilio trial can't be recorded (Twilio blocks recording on trial accounts), so the full transcript is below. Browser calls from <b>Talk to Divya</b> are recorded and play here.</p>`
               : `<p class="muted small" style="margin-top:6px">${mode() === 'demo' ? 'Sample call — no audio.' : 'No recording was saved for this call.'} Recorded calls play here (stored in Supabase Storage).</p>`}
         </section>
 
@@ -96,7 +96,7 @@ function openDrawer(c) {
           <div class="card-head"><h3>Full conversation</h3><span class="muted small">${c.messages?.length || 0} turns</span></div>
           <div class="transcript">
             ${(c.messages || []).map(m => `
-              <div class="msg ${m.role}"><span class="who">${m.role === 'assistant' ? 'Aanya' : esc(c.name)}</span>${esc(m.text)}</div>`).join('')}
+              <div class="msg ${m.role}"><span class="who">${m.role === 'assistant' ? 'Divya' : esc(c.name)}</span>${esc(m.text)}</div>`).join('')}
           </div>
         </section>
       </div>

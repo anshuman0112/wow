@@ -1,4 +1,4 @@
-"""Render the system prompt and create/update Aanya in Vapi (pointing her webhook at the Python API).
+"""Render the system prompt and create/update Divya in Vapi (pointing her webhook at the Python API).
 
     python scripts/sync_assistant.py            # full sync
     python scripts/sync_assistant.py --dry-run  # only write docs/system_prompt.md

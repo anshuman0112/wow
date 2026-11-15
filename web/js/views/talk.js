@@ -1,4 +1,4 @@
-// Live browser call with Aanya via the Vapi Web SDK (this is the shareable demo link).
+// Live browser call with Divya via the Vapi Web SDK (this is the shareable demo link).
 import { config, isLive } from '../config.js';
 import { voices, voiceConfig } from '../campaign-data.js';
 import { getCalls, getLeads } from '../store.js';
@@ -14,7 +14,7 @@ export default async function talk(el, [leadId] = []) {
 
   el.innerHTML = `
     <div class="page-head">
-      <div><h1>Talk to Aanya</h1><p class="muted">Divyasree consultant · Whispers of the Wind · English & Hindi</p></div>
+      <div><h1>Talk to Divya</h1><p class="muted">Divyasree consultant · Whispers of the Wind · English & Hindi</p></div>
     </div>
     ${lead ? `<section class="card card-pad" style="margin-bottom:16px">
       <div class="row">
@@ -23,7 +23,7 @@ export default async function talk(el, [leadId] = []) {
           <div class="muted small">${esc(lead.phone || '')}${lead.location ? ' · ' + esc(lead.location) : ''}${lead.budget ? ' · budget ' + esc(lead.budget) : ''}</div></div>
         <a class="btn btn-ghost small" href="#/talk">Not this lead</a>
       </div>
-      <p class="muted small" style="margin-top:10px">Browser call: you play ${esc(firstName || 'the lead')}. Aanya greets them by name, and the result (summary, hot / warm / cold, callback) is saved to this lead automatically.</p>
+      <p class="muted small" style="margin-top:10px">Browser call: you play ${esc(firstName || 'the lead')}. Divya greets them by name, and the result (summary, hot / warm / cold, callback) is saved to this lead automatically.</p>
     </section>` : ''}
     ${live ? '' : `<div class="banner">${icon('info')}<span><b>Live calling is not connected yet.</b> Add the Vapi public key and assistant ID in <span class="mono">web/js/config.js</span>. Meanwhile you can replay a sample conversation (text only).</span></div>`}
     <div class="grid g-main">
@@ -37,7 +37,7 @@ export default async function talk(el, [leadId] = []) {
           <div class="row" style="justify-content:center;gap:12px">
             ${live ? `<label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Your first name (optional)
               <input class="input" id="caller" maxlength="40" placeholder="e.g. Rahul" value="${esc(firstName)}" style="width:180px;text-align:center"></label>` : ''}
-            <label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Aanya's voice
+            <label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Divya's voice
               <select class="input" id="voice" style="width:180px">
                 ${voices.map(v => `<option value="${v.id}">${esc(v.name)} — ${esc(v.languages)}</option>`).join('')}
               </select></label>
@@ -48,7 +48,7 @@ export default async function talk(el, [leadId] = []) {
             <button class="btn" id="mute" hidden>${icon('micOff')}Mute</button>
             <button class="btn btn-danger" id="stop" hidden>${icon('end')}End call</button>
           </div>
-          <p class="muted small" style="max-width:380px">Speak naturally — you can interrupt Aanya at any time and she will stop and listen. Try asking in Hindi, or tell her the budget is too high.</p>
+          <p class="muted small" style="max-width:380px">Speak naturally — you can interrupt Divya at any time and she will stop and listen. Try asking in Hindi, or tell her the budget is too high.</p>
         </div>
       </section>
       <section class="card">
@@ -75,7 +75,7 @@ export default async function talk(el, [leadId] = []) {
   const setState = s => {
     state = s;
     if (!$('status')) return;
-    const labels = { idle: 'Ready', connecting: 'Connecting…', listening: 'Listening', speaking: 'Aanya is speaking', ended: 'Call ended' };
+    const labels = { idle: 'Ready', connecting: 'Connecting…', listening: 'Listening', speaking: 'Divya is speaking', ended: 'Call ended' };
     $('status').textContent = labels[s] || s;
     $('pulse').classList.toggle('on', s === 'listening' || s === 'speaking');
     $('orb').classList.toggle('live', s === 'listening' || s === 'speaking');
@@ -88,7 +88,7 @@ export default async function talk(el, [leadId] = []) {
   const renderTx = () => {
     const box = $('tx');
     if (!box || !transcript.length) return;
-    box.innerHTML = transcript.map(m => `<div class="msg ${m.role}${m.partial ? ' partial' : ''}"><span class="who">${m.role === 'assistant' ? 'Aanya' : 'You'}</span>${esc(m.text)}</div>`).join('');
+    box.innerHTML = transcript.map(m => `<div class="msg ${m.role}${m.partial ? ' partial' : ''}"><span class="who">${m.role === 'assistant' ? 'Divya' : 'You'}</span>${esc(m.text)}</div>`).join('');
     box.scrollTop = box.scrollHeight;
     $('turns').textContent = `${transcript.filter(m => !m.partial).length} turns`;
   };

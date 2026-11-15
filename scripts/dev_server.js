@@ -22,4 +22,4 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
   }
-}).listen(port, () => console.log(`Vaani dashboard: http://localhost:${port}`));
+}).listen(port, () => console.log(`WOW Voice Agent dashboard: http://localhost:${port}`));

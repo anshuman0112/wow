@@ -1,8 +1,8 @@
-// Rings a real phone and connects it to Aanya — works on a FREE Twilio trial.
+// Rings a real phone and connects it to Divya — works on a FREE Twilio trial.
 //   npm run call -- +916360246901 [Name]
 //
 // How: Twilio dials the phone from your trial number. When it's answered, Twilio bridges the
-// call into Aanya's free Vapi SIP line (VAPI_SIP_URI). No Vapi phone-number import needed.
+// call into Divya's free Vapi SIP line (VAPI_SIP_URI). No Vapi phone-number import needed.
 // Trial limits: you can only call numbers verified in Twilio, and Twilio plays a short trial
 // message first ("press any key").
 import { readFileSync } from 'node:fs';
@@ -38,4 +38,4 @@ if (!res.ok) {
   if (j.code === 21215 || /geo|permission/i.test(j.message || '')) console.error('  → Enable India: Twilio Console → Voice → Settings → Geo permissions → tick India.');
   process.exit(1);
 }
-console.log(`✓ Ringing ${to} now (Twilio call ${j.sid}). Answer, press any key after the trial message, and Aanya will speak.`);
+console.log(`✓ Ringing ${to} now (Twilio call ${j.sid}). Answer, press any key after the trial message, and Divya will speak.`);

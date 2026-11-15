@@ -1,4 +1,4 @@
-// Connects your Twilio number to Aanya in Vapi, so she can make real phone calls.
+// Connects your Twilio number to Divya in Vapi, so she can make real phone calls.
 //   npm run twilio
 // Needs in .env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER (e.g. +1415xxxxxxx), VAPI_PRIVATE_KEY.
 // Also checks the Twilio account so problems (trial limits, unverified numbers) are explained clearly.
@@ -15,7 +15,7 @@ const state = existsSync(path.join(root, 'vapi/.state.json')) ? JSON.parse(readF
 
 const missing = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER', 'VAPI_PRIVATE_KEY'].filter(k => !env[k]);
 if (missing.length) { console.error(`✗ Missing in .env: ${missing.join(', ')}`); process.exit(1); }
-if (!state.assistantId) { console.error('✗ Run `npm run sync` first (creates Aanya).'); process.exit(1); }
+if (!state.assistantId) { console.error('✗ Run `npm run sync` first (creates Divya).'); process.exit(1); }
 
 const sid = env.TWILIO_ACCOUNT_SID, number = env.TWILIO_PHONE_NUMBER.replace(/[^\d+]/g, '');
 const tw = async p => {
@@ -42,7 +42,7 @@ console.log(`✓ You own ${number}`);
 if (account.type === 'Trial') {
   const ids = await tw('/OutgoingCallerIds.json');
   const list = (ids.outgoing_caller_ids || []).map(x => x.phone_number);
-  console.log(`! Trial account: Aanya can only call these verified numbers: ${list.join(', ') || 'none yet'}`);
+  console.log(`! Trial account: Divya can only call these verified numbers: ${list.join(', ') || 'none yet'}`);
   console.log('  Add more: Twilio Console → Phone Numbers → Verified Caller IDs.');
   console.log('  Calling India? Twilio Console → Voice → Settings → Geo permissions → tick India.');
   console.log('  Trial calls start with a short Twilio message; press any key to continue the call.');
@@ -53,11 +53,11 @@ const V = 'https://api.vapi.ai';
 const vh = { Authorization: `Bearer ${env.VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' };
 const list = await (await fetch(`${V}/phone-number?limit=100`, { headers: vh })).json();
 let phone = Array.isArray(list) ? list.find(p => p.number === number) : null;
-const body = { assistantId: state.assistantId, name: 'Vaani · Twilio' };
+const body = { assistantId: state.assistantId, name: 'WOW Voice Agent · Twilio' };
 if (phone) {
   const r = await fetch(`${V}/phone-number/${phone.id}`, { method: 'PATCH', headers: vh, body: JSON.stringify(body) });
   if (!r.ok) { console.error('✗ Vapi update failed:', await r.text()); process.exit(1); }
-  console.log(`✓ Number already in Vapi, linked to Aanya (${phone.id})`);
+  console.log(`✓ Number already in Vapi, linked to Divya (${phone.id})`);
 } else {
   const r = await fetch(`${V}/phone-number`, {
     method: 'POST', headers: vh,
@@ -66,7 +66,7 @@ if (phone) {
   const j = await r.json();
   if (!r.ok) { console.error('✗ Vapi import failed:', JSON.stringify(j)); process.exit(1); }
   phone = j;
-  console.log(`✓ Number imported into Vapi and linked to Aanya (${phone.id})`);
+  console.log(`✓ Number imported into Vapi and linked to Divya (${phone.id})`);
 }
 
 // 3. Save IDs for n8n's dialer and restart n8n so it sees them

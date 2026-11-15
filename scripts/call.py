@@ -1,4 +1,4 @@
-"""Ring a real phone and connect it to Aanya, from the terminal.
+"""Ring a real phone and connect it to Divya, from the terminal.
 
     python scripts/call.py +916360246901          # call a number directly (Twilio bridge)
     python scripts/call.py --lead <lead uuid>      # call a saved lead (same as the dashboard's "Call now")
@@ -36,7 +36,7 @@ async def main(args: list[str]) -> None:
                 sys.exit("✗ Needs TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER and VAPI_SIP_URI in .env")
             r = await Twilio(http).call(number, s.twilio_number, f"{s.public_base_url}/api/twiml")
             res = {"ok": True, "via": "twilio-bridge", "id": r.get("sid")}
-    print(f"✓ Ringing now ({res['via']}, {res['id']}). Answer, press any key after Twilio's trial message, and Aanya will speak.")
+    print(f"✓ Ringing now ({res['via']}, {res['id']}). Answer, press any key after Twilio's trial message, and Divya will speak.")
 
 
 if __name__ == "__main__":

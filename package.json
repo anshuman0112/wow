@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Vaani: outbound AI voice agent (Aanya) for Divyasree Whispers of the Wind",
+  "description": "WOW Voice Agent: outbound AI voice agent (Divya) for Divyasree Whispers of the Wind",
   "scripts": {
     "db:schema": "python scripts/apply_schema.py",
     "prompt": "node scripts/sync_assistant.js --dry-run",

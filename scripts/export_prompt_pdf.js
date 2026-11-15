@@ -18,7 +18,7 @@ const prompt = await renderPrompt();
 const a = buildAssistant({ systemPrompt: prompt, voiceId: pinnedVoices[0].id });
 const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>System Prompt · Aanya</title>
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>System Prompt · Divya</title>
 <style>
   @page { size: A4; margin: 18mm 16mm; }
   body { font: 10.5pt/1.55 "Segoe UI", Arial, sans-serif; color: #1b1f1d; }
@@ -41,8 +41,8 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><title>System Pro
   .note { color: #5d635f; font-size: 9.5pt; }
   .page-break { break-before: page; }
 </style></head><body>
-<h1>System Prompt — Aanya</h1>
-<div class="sub">AI Voice Agent for Divyasree "Whispers of the Wind" · Vaani · ${esc(date)}</div>
+<h1>System Prompt — Divya</h1>
+<div class="sub">Whispers of the Wind (WOW) by Divyasree Developers · Voice agent: Divya · ${esc(date)}</div>
 
 <div class="meta">
   <b>Agent</b><span>${esc(campaign.persona.name)}, a ${esc(campaign.persona.role)} (outbound lead qualification)</span>

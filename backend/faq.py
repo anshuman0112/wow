@@ -60,7 +60,7 @@ def lang_of(utterance: str, current: str = "en") -> str:
     return "hi" if re.search(HINDI, utterance.lower()) else current
 
 
-# How each checkpoint question looks when Aanya asks it (English + Hinglish).
+# How each checkpoint question looks when Divya asks it (English + Hinglish).
 ASKED = {
     "intent": r"weekend home (or|ya) (as |an )?investment|weekend home.*investment",
     "geography": r"comfortable with .*(nandi|devanahalli|location|area)|(nandi|devanahalli).*(theek|comfortable)",

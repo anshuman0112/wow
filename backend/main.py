@@ -1,4 +1,4 @@
-"""Vaani API — FastAPI app.
+"""WOW Voice Agent API — FastAPI app.
 
 Runs on Vercel as a serverless Python function (api/index.py) and locally with:
     uvicorn backend.main:app --reload --port 8000
@@ -24,8 +24,8 @@ from . import calls, knowledge, leads, phone, phone_agent, stream_agent
 from .clients import TIMEOUT, Groq, ServiceError, Supabase
 from .settings import settings
 
-app = FastAPI(title="Vaani API", version="1.0.0",
-              description="Backend for Vaani — the Divyasree outbound AI voice agent (Aanya).")
+app = FastAPI(title="WOW Voice Agent API", version="1.0.0",
+              description="Backend for WOW Voice Agent — the Divyasree outbound AI voice agent (Divya).")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://vaani-divyasree.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173"],
@@ -172,7 +172,7 @@ class VerifyRequest(BaseModel):
 
 @app.post("/api/phone/verify")
 async def phone_verify(req: VerifyRequest, http: httpx.AsyncClient = Depends(http_client)):
-    """Free trial: let anyone (e.g. a reviewer) verify their own number so Aanya can call it."""
+    """Free trial: let anyone (e.g. a reviewer) verify their own number so Divya can call it."""
     try:
         return await phone.verify_number(http, req.phone, req.name.strip(), req.location.strip())
     except phone.CallError as e:
@@ -328,7 +328,7 @@ async def twiml_voice_preview(request: Request):
 async def twiml_voice_demo():
     """Audition call: every voice in the campaign's phone voice library reads the same line, numbered."""
     from .campaign import data
-    line = ("Hello Anshuman, this is Aanya from Divyasree Developers, calling about Whispers of the Wind near "
+    line = ("Hello Anshuman, this is Divya from Divyasree Developers, calling about Whispers of the Wind near "
             "Nandi Hills. Plots start at ninety-two point four lakh. Is this a good time for two minutes?")
     parts = []
     for n, v in enumerate(data()["phoneVoices"]["library"], 1):
@@ -338,7 +338,7 @@ async def twiml_voice_demo():
 
 @app.api_route("/api/twiml", methods=["GET", "POST"])
 async def twiml(lead: str = Query(default="", max_length=64)):
-    """Twilio fetches this when the lead answers: connect them to Aanya's SIP line."""
+    """Twilio fetches this when the lead answers: connect them to Divya's SIP line."""
     lead = lead if re.fullmatch(r"[0-9a-fA-F-]{36}", lead) else ""
     return Response(content=phone.twiml_connect_to_aanya(lead), media_type="text/xml")
 

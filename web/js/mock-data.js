@@ -25,7 +25,7 @@ export const sampleCalls = [
     callback_time: 'Sat, 11:00 AM',
     summary: 'Whitefield resident buying as an investment. Comfortable with the corridor, budget ~₹1.2 Cr, fine with Dec 2029. Asked about schools (deferred to expert). Booked expert call Saturday 11 AM.',
     messages: [
-      ['a', 'Hello, am I speaking with Rahul? This is Aanya, a consultant from Divyasree Developers, calling about Whispers of the Wind near Nandi Hills. Is this a good time for two minutes?'],
+      ['a', 'Hello, am I speaking with Rahul? This is Divya, a consultant from Divyasree Developers, calling about Whispers of the Wind near Nandi Hills. Is this a good time for two minutes?'],
       ['u', 'Yeah, sure, go ahead.'],
       ['a', 'Thank you. Are you looking at this as a weekend home, or as an investment?'],
       ['u', 'Investment mostly. Budget around one point two crore.'],
@@ -46,7 +46,7 @@ export const sampleCalls = [
     callback_time: 'Sun, 7:30 PM IST',
     summary: 'Dubai-based NRI, switched to Hindi. Wants a weekend home for family visits. Budget ~₹2 Cr fits, timeline fine. Expert call booked Sunday 7:30 PM IST.',
     messages: [
-      ['a', 'Hello, am I speaking with Vikram? This is Aanya from Divyasree Developers, calling about Whispers of the Wind near Nandi Hills. Is this a good time?'],
+      ['a', 'Hello, am I speaking with Vikram? This is Divya from Divyasree Developers, calling about Whispers of the Wind near Nandi Hills. Is this a good time?'],
       ['u', 'Haan boliye, Hindi mein baat kar sakte hain?'],
       ['a', 'Bilkul! Kya aap yeh apne liye weekend home ke roop mein dekh rahe hain, ya investment ke liye?'],
       ['u', 'Family ke liye, jab India aate hain tab.'],
@@ -67,7 +67,7 @@ export const sampleCalls = [
     callback_time: 'Next week',
     summary: 'Budget fits (~₹1.5 Cr) but felt the location is far. Responded to the weekend-home angle; open to an expert call next week. Not yet convinced on location.',
     messages: [
-      ['a', 'Hello Neha, this is Aanya from Divyasree Developers about Whispers of the Wind near Nandi Hills. Do you have two minutes?'],
+      ['a', 'Hello Neha, this is Divya from Divyasree Developers about Whispers of the Wind near Nandi Hills. Do you have two minutes?'],
       ['u', 'Okay, quickly.'],
       ['a', 'Thank you. Is this for your own use, or an investment?'],
       ['u', 'Own use, but honestly Nandi Hills feels too far from Indiranagar.'],
@@ -88,7 +88,7 @@ export const sampleCalls = [
     callback_time: 'Fri, 6:00 PM',
     summary: 'Investor with ~₹70 L, below the ₹92.4 L entry price. Open to hearing loan and payment-stage options. Expert call booked Friday 6 PM to discuss financing.',
     messages: [
-      ['a', 'Hello Arjun, this is Aanya from Divyasree Developers about Whispers of the Wind near Nandi Hills. Is now a good time?'],
+      ['a', 'Hello Arjun, this is Divya from Divyasree Developers about Whispers of the Wind near Nandi Hills. Is now a good time?'],
       ['u', 'Yes. But my budget is around 70 lakhs only.'],
       ['a', 'Thank you for being upfront. Entry plots of about 1,200 square feet start at 92.4 laakh, and payments are linked to development stages.'],
       ['u', 'So I do not pay everything now?'],
@@ -109,7 +109,7 @@ export const sampleCalls = [
     callback_time: null,
     summary: 'User was in a meeting and irritated by the call. Agent apologised once and offered a callback; user asked not to be called. Marked do-not-call.',
     messages: [
-      ['a', 'Hello, am I speaking with Sanjay? This is Aanya from Divyasree Developers, calling about—'],
+      ['a', 'Hello, am I speaking with Sanjay? This is Divya from Divyasree Developers, calling about—'],
       ['u', "I'm in a meeting. Why do you people keep calling?"],
       ['a', "I'm really sorry for disturbing you. Shall I have someone call at a better time, or would you prefer we don't call again?"],
       ['u', "Don't call again."],
@@ -124,7 +124,7 @@ export const sampleCalls = [
     callback_time: null,
     summary: 'Asked for exact per-sq.ft. price and a competitor comparison; agent did not guess and deferred to the expert. Wants ready-to-move inside the city, so not a fit. Closed politely.',
     messages: [
-      ['a', 'Hello Meera, this is Aanya from Divyasree Developers about Whispers of the Wind near Nandi Hills. Do you have two minutes?'],
+      ['a', 'Hello Meera, this is Divya from Divyasree Developers about Whispers of the Wind near Nandi Hills. Do you have two minutes?'],
       ['u', 'Sure. What is the exact price per square foot for a corner plot?'],
       ['a', "Good question — I don't want to give you an incorrect figure, so our Property Expert will confirm exact plot pricing. Overall, plots range from 92.4 laakh to 2.46 kror."],
       ['u', 'Is it better than the Prestige project nearby?'],

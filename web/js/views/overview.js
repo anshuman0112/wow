@@ -17,11 +17,11 @@ export default async function overview(el) {
     <div class="page-head">
       <div>
         <h1>Overview</h1>
-        <p class="muted">Whispers of the Wind · outbound lead qualification by Aanya</p>
+        <p class="muted">Whispers of the Wind · outbound lead qualification by Divya</p>
       </div>
       <div class="row">
         <a class="btn" href="#/leads">${icon('upload')}Upload leads</a>
-        <a class="btn btn-primary" href="#/talk">${icon('mic')}Talk to Aanya</a>
+        <a class="btn btn-primary" href="#/talk">${icon('mic')}Talk to Divya</a>
       </div>
     </div>
 
@@ -72,7 +72,7 @@ export default async function overview(el) {
           <h2>How it works</h2>
           <ol class="muted" style="margin:10px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
             <li><b style="color:var(--ink)">Upload leads</b> — any CSV, Excel, JSON or SQL file.</li>
-            <li><b style="color:var(--ink)">Aanya calls</b> them and runs the 4 checkpoints.</li>
+            <li><b style="color:var(--ink)">Divya calls</b> them and runs the 4 checkpoints.</li>
             <li><b style="color:var(--ink)">AI scores</b> each call hot, warm or cold.</li>
             <li><b style="color:var(--ink)">Everything is saved</b> — audio, transcript, summary.</li>
             <li><b style="color:var(--ink)">Hot leads</b> get an expert callback.</li>

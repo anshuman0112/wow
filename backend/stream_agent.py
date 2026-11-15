@@ -1,4 +1,4 @@
-"""Aanya on a real phone call with LIVE audio streaming (low latency).
+"""Divya on a real phone call with LIVE audio streaming (low latency).
 
 Why: the <Gather> engine waits for Twilio to decide you finished talking, then makes a web request,
 then Twilio synthesises the whole reply before playing it. Here everything is streamed:
@@ -312,7 +312,7 @@ class LiveCall:
         frame = base64.b64decode(payload)
         rms = frame_rms(frame)
         speaking = not self.playback_idle.is_set()
-        # louder threshold while Aanya talks, so line echo of her own voice doesn't count as the lead
+        # louder threshold while Divya talks, so line echo of her own voice doesn't count as the lead
         threshold = max(self.noise * (4.0 if speaking else 2.8), 900 if speaking else 450)
         voiced = rms > threshold
         if not voiced and not self.in_speech:
@@ -341,7 +341,7 @@ class LiveCall:
             self.utter = bytearray()
 
     async def barge_in(self) -> None:
-        """Lead started talking over Aanya: stop her immediately."""
+        """Lead started talking over Divya: stop her immediately."""
         await self.send({"event": "clear", "streamSid": self.stream_sid})
         self.pending_marks.clear()   # Twilio echoes cleared marks back; they were never heard
         self.playback_idle.set()
@@ -479,7 +479,7 @@ class LiveCall:
             self.last_activity = time.monotonic()
 
     async def idle_watch(self) -> None:
-        """Lead silent for 8 s after Aanya finished → nudge once, then say goodbye."""
+        """Lead silent for 8 s after Divya finished → nudge once, then say goodbye."""
         while not self.closed.is_set():
             await asyncio.sleep(1)
             busy = self.in_speech or not self.playback_idle.is_set() or (self.reply_task and not self.reply_task.done())

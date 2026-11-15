@@ -43,7 +43,7 @@ def build_row(msg: dict, call: dict) -> dict:
     messages = [{"role": "user" if m.get("role") == "user" else "assistant",
                  "text": m.get("message") or m.get("content") or "", "t": m.get("secondsFromStart")}
                 for m in (art.get("messages") or msg.get("messages") or []) if m.get("role") in ("bot", "assistant", "user")]
-    transcript = art.get("transcript") or "\n".join(("Lead: " if m["role"] == "user" else "Aanya: ") + m["text"] for m in messages)
+    transcript = art.get("transcript") or "\n".join(("Lead: " if m["role"] == "user" else "Divya: ") + m["text"] for m in messages)
 
     overrides = call.get("assistantOverrides") or {}
     variables = overrides.get("variableValues") or {}

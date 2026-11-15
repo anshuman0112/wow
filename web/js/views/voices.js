@@ -2,7 +2,7 @@ import { config } from '../config.js';
 import { esc, icon, toast } from '../ui.js';
 
 // Phone voice library: listen to each voice (▶ plays the exact Twilio voice in the browser) and pick
-// the one Aanya uses on every real phone call.
+// the one Divya uses on every real phone call.
 const SDK = 'https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.18.5/dist/twilio.min.js';
 let device = null, deviceAt = 0, current = null;
 
@@ -43,7 +43,7 @@ export default async function voices(el) {
     el.innerHTML = `
       <div class="page-head">
         <div><h1>Phone voices</h1>
-        <p class="muted">Choose Aanya's voice for real phone calls. Press ▶ to hear exactly what a lead hears.</p></div>
+        <p class="muted">Choose Divya's voice for real phone calls. Press ▶ to hear exactly what a lead hears.</p></div>
       </div>
       <div class="banner">${icon('info')}<span>Previews play through your speakers via Twilio. Your browser may ask for
         microphone permission once: it is only needed to open the audio line, nothing is recorded.
@@ -99,7 +99,7 @@ export default async function voices(el) {
       if (r.ok) {
         data.selected = (await r.json()).selected;
         const v = data.library.find(x => x.id === data.selected);
-        toast(`Aanya will now call leads with ${v?.label || 'this voice'}`);
+        toast(`Divya will now call leads with ${v?.label || 'this voice'}`);
         stop(); render();
       } else { toast('Could not save the voice'); use.disabled = false; }
     }

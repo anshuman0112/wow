@@ -1,4 +1,4 @@
-"""Evaluate Aanya's phone brain on scripted conversations — quality, latency and token cost.
+"""Evaluate Divya's phone brain on scripted conversations — quality, latency and token cost.
 
     python scripts/evaluate.py                # all scenarios → docs/eval_report.md
     python scripts/evaluate.py real_call      # one scenario
@@ -96,7 +96,7 @@ def global_checks(convo: list[dict]) -> list[tuple[bool, str]]:
     return results
 
 
-# ── scenarios: (lead line, [checks on Aanya's reply]) ────────────────────────
+# ── scenarios: (lead line, [checks on Divya's reply]) ────────────────────────
 SCENARIOS: dict[str, list[tuple[str, list[str]]]] = {
     "real_call": [  # the questions from your real phone call
         ("Yeah, sure.", ["not_end"]),
@@ -189,7 +189,7 @@ def report(results: list[dict]) -> str:
         models[m] = models.get(m, 0) + 1
     P, T = sum(r["passed"] for r in results), sum(r["total"] for r in results)
     lines = [
-        "# Aanya phone-brain evaluation", "",
+        "# Divya phone-brain evaluation", "",
         f"_System prompt ≈ {len(SYSTEM_PHONE) // 4} tokens · {len(allturns)} turns · {time.strftime('%Y-%m-%d %H:%M')}_", "",
         "| Metric | Value |", "|---|---|",
         f"| **Checks passed** | **{P}/{T} ({100 * P // max(T, 1)}%)** |",
@@ -204,7 +204,7 @@ def report(results: list[dict]) -> str:
         lines += [f"## {r['name']} — {r['passed']}/{r['total']}", ""]
         for t in r["turns"]:
             lines.append(f"- **Lead:** {t['lead']}")
-            lines.append(f"  **Aanya:** {t['aanya']}  _({t['latency']}s, {(t['usage'] or {}).get('model', '?')})_")
+            lines.append(f"  **Divya:** {t['aanya']}  _({t['latency']}s, {(t['usage'] or {}).get('model', '?')})_")
             for rule, ok, why in t["checks"]:
                 lines.append(f"  - {'✅' if ok else '❌'} {why}")
         for ok, why in r["global"]:

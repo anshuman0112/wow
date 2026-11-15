@@ -3,7 +3,7 @@
 Two ways out, picked automatically:
   • vapi-number   — a paid number imported into Vapi (VAPI_PHONE_NUMBER_ID): Vapi dials the lead directly.
   • twilio-bridge — FREE Twilio trial: Twilio dials the lead, and when they answer our /api/twiml
-                    endpoint tells Twilio to connect the call to Aanya's free Vapi SIP line.
+                    endpoint tells Twilio to connect the call to Divya's free Vapi SIP line.
 """
 from __future__ import annotations
 

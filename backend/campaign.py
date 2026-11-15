@@ -68,9 +68,9 @@ def build_assistant(*, system_prompt: str, voice_id: str | None, server_url: str
                     structured_output_id: str | None, llm: str = "openai:gpt-4.1-mini") -> dict:
     provider, _, model = llm.partition(":")
     a: dict = {
-        "name": "Aanya · Divyasree WOW",
+        "name": "Divya · Divyasree WOW",
         "firstMessageMode": "assistant-speaks-first",
-        "firstMessage": "Hello {{ name | default: 'there' }}! This is Aanya, a consultant from Divyasree Developers, "
+        "firstMessage": "Hello {{ name | default: 'there' }}! This is Divya, a consultant from Divyasree Developers, "
                         "calling about Whispers of the Wind, our villa plot community near Nandi Hills in North Bengaluru. "
                         "Is this a good time for two minutes?",
         "model": {
@@ -87,7 +87,7 @@ def build_assistant(*, system_prompt: str, voice_id: str | None, server_url: str
         "silenceTimeoutSeconds": 15,     # protects free credits
         "maxDurationSeconds": 240,       # hard cap: 4 minutes
         "endCallMessage": "Thank you for your time. Have a lovely day!",
-        "voicemailMessage": "Hello, this is Aanya from Divyasree Developers about Whispers of the Wind, our villa plots "
+        "voicemailMessage": "Hello, this is Divya from Divyasree Developers about Whispers of the Wind, our villa plots "
                             "near Nandi Hills. I will try you again later. Thank you!",
         "artifactPlan": {"recordingEnabled": True, "recordingFormat": "mp3",
                          **({"structuredOutputIds": [structured_output_id]} if structured_output_id else {})},

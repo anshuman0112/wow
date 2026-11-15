@@ -1,4 +1,4 @@
-// The full Vapi assistant configuration for Aanya, kept in code so it is versioned and repeatable.
+// The full Vapi assistant configuration for Divya, kept in code so it is versioned and repeatable.
 
 // What the AI extracts from every call (Vapi "Structured Output", replaces the old analysisPlan).
 export const leadAnalysisOutput = {
@@ -36,9 +36,9 @@ export function parseLlm(spec = 'openai:gpt-4.1-mini') {
 
 export function buildAssistant({ systemPrompt, voiceId, serverUrl, structuredOutputId, llm = parseLlm() }) {
   return {
-    name: 'Aanya · Divyasree WOW',
+    name: 'Divya · Divyasree WOW',
     firstMessageMode: 'assistant-speaks-first',
-    firstMessage: "Hello {{ name | default: 'there' }}! This is Aanya, a consultant from Divyasree Developers, calling about Whispers of the Wind, our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?",
+    firstMessage: "Hello {{ name | default: 'there' }}! This is Divya, a consultant from Divyasree Developers, calling about Whispers of the Wind, our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?",
 
     // Brain: low temperature to stay factual.
     model: {
@@ -64,7 +64,7 @@ export function buildAssistant({ systemPrompt, voiceId, serverUrl, structuredOut
     silenceTimeoutSeconds: 15,     // hang up after 15 s of silence (protects free credits)
     maxDurationSeconds: 240,       // hard cap: 4 minutes per call
     endCallMessage: 'Thank you for your time. Have a lovely day!',
-    voicemailMessage: 'Hello, this is Aanya from Divyasree Developers about Whispers of the Wind, our villa plots near Nandi Hills. I will try you again later. Thank you!',
+    voicemailMessage: 'Hello, this is Divya from Divyasree Developers about Whispers of the Wind, our villa plots near Nandi Hills. I will try you again later. Thank you!',
 
     // Recording + transcript + AI analysis after every call.
     artifactPlan: {

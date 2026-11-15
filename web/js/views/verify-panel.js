@@ -2,7 +2,7 @@ import { config } from '../config.js';
 import { esc, icon, toast } from '../ui.js';
 
 // "Verify a number" (free Twilio trial): a reviewer verifies their own phone in ~30 seconds,
-// then Aanya can call it. Twilio rings the number and the person types the code shown here.
+// then Divya can call it. Twilio rings the number and the person types the code shown here.
 const state = { stage: 'form', phone: '', code: '', leadId: null, err: '', busy: false };
 let poll = null;
 
@@ -17,7 +17,7 @@ export function verifyPanel() {
       <button class="btn btn-ghost" data-v="reset">Cancel</button>`;
   } else if (s.stage === 'done') {
     body = `
-      <p>✅ <b>${esc(s.phone)}</b> can receive calls from Aanya.</p>
+      <p>✅ <b>${esc(s.phone)}</b> can receive calls from Divya.</p>
       <div class="row" style="gap:8px;margin-top:10px">
         <button class="btn btn-primary" data-v="call" ${s.busy ? 'disabled' : ''}>${icon('phone')}<span>${s.busy ? 'Calling…' : 'Call me now'}</span></button>
         <button class="btn btn-ghost" data-v="reset">Verify another number</button>
@@ -33,7 +33,7 @@ export function verifyPanel() {
   }
   return `
     <section class="card" style="margin-bottom:16px">
-      <div class="card-head"><div><h2>Want Aanya to call you?</h2>
+      <div class="card-head"><div><h2>Want Divya to call you?</h2>
         <p class="muted small">This demo runs on Twilio's free trial, which can only call verified numbers.
         Verify yours once (about 30 seconds): Twilio rings you and you type a 6-digit code.</p></div></div>
       <div class="card-pad">${body}
@@ -67,7 +67,7 @@ export function bindVerifyPanel(el, redraw, onLeadAdded) {
         const r = await fetch(`${config.apiBaseUrl}/calls/now`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lead_id: s.leadId }) });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Could not start the call');
-        toast('Calling you now. After Twilio\'s trial message, press any key to talk to Aanya.');
+        toast('Calling you now. After Twilio\'s trial message, press any key to talk to Divya.');
         await onLeadAdded();
       } catch (ex) { s.err = ex.message; }
       s.busy = false; redraw();

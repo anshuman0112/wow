@@ -7,7 +7,7 @@ export default async function campaignView(el) {
   let cp = 0;
   el.innerHTML = `
     <div class="page-head">
-      <div><h1>Campaign & knowledge</h1><p class="muted">Everything Aanya says and knows comes from this page</p></div>
+      <div><h1>Campaign & knowledge</h1><p class="muted">Everything Divya says and knows comes from this page</p></div>
       <span class="badge b-ok"><span class="dot"></span>Active</span>
     </div>
 
@@ -65,7 +65,7 @@ export default async function campaignView(el) {
 
     <section class="card" style="margin-top:16px">
       <div class="card-head">
-        <div><h2>Fact sheet</h2><p class="muted small">Aanya answers only from these facts. Anything else → "our Property Expert will confirm that". If a website disagrees with the brief, the brief wins.</p></div>
+        <div><h2>Fact sheet</h2><p class="muted small">Divya answers only from these facts. Anything else → "our Property Expert will confirm that". If a website disagrees with the brief, the brief wins.</p></div>
         <div class="row"><span class="badge b-brand">Brief</span><span class="badge b-gold">Web research</span></div>
       </div>
       <div class="grid g-2 card-pad">

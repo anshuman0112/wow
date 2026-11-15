@@ -1,4 +1,4 @@
-# n8n guide: learn it by running Vaani's automations
+# n8n guide: learn it by running WOW Voice Agent's automations
 
 ## What is n8n? (one minute)
 n8n is a visual automation tool. You connect boxes called **nodes** with arrows, and data flows from left to right.
@@ -18,7 +18,7 @@ n8n is a visual automation tool. You connect boxes called **nodes** with arrows,
 | **WF4 · End-of-call save** | Webhook `/vapi-events` (Vapi calls it when a call ends) | Saves the transcript, summary, score and recording to Supabase, updates the lead, and sends a Telegram alert for hot leads |
 | **WF2 · Lead import** | Webhooks `/lead-map` and `/lead-import` (the dashboard calls them) | Groq AI works out the columns of any file; leads are cleaned, de-duplicated and saved |
 | **WF3 · Auto-dialer** | Schedule, every 5 min | 10 AM–7 PM IST: picks new or no-answer leads and asks Vapi to call them (needs Twilio) |
-| **WF1 · Knowledge builder** | Webhook `/knowledge-build` | Turns any business document into a clean fact sheet, so Vaani can be reused for another client |
+| **WF1 · Knowledge builder** | Webhook `/knowledge-build` | Turns any business document into a clean fact sheet, so WOW Voice Agent can be reused for another client |
 
 ### Example: WF4 for one call
 ```
@@ -71,7 +71,7 @@ n8n runs in **Docker** (`docker-compose.yml`). Open Docker Desktop first.
 > **Note:** the free ngrok URL changes every time you restart ngrok. When it changes, repeat steps 4, 6 and 7.
 
 ## How to test without a real call
-1. Open **WF4**, click **Execute workflow**, then make a call on the "Talk to Aanya" page. n8n shows the data inside every node, green for success.
+1. Open **WF4**, click **Execute workflow**, then make a call on the "Talk to Divya" page. n8n shows the data inside every node, green for success.
 2. **Pin data:** after one real run, click a node's output and **Pin** it. You can now re-run later nodes without making another call, which is great for learning and debugging.
 3. **Test lead import from a terminal:**
    ```bash

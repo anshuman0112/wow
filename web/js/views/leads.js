@@ -71,8 +71,8 @@ export default async function leadsView(el) {
                   <td>${l.status === 'do_not_call'
                     ? '<span class="faint small">Not allowed</span>'
                     : `<div class="row" style="gap:6px;flex-wrap:nowrap">
-                        <button class="btn small" data-call="${esc(l.id)}" title="${realCalls ? 'Ring this lead\'s real phone' : 'Start a browser call with Aanya, personalised for this lead'}" ${realCalls && (mode() === 'demo' || l.status === 'calling') ? 'disabled' : ''}>${icon('phone')}${realCalls ? (l.status === 'calling' ? 'Calling…' : 'Call phone') : 'Call now'}</button>
-                        ${realCalls ? `<a class="btn btn-ghost small" href="#/talk/${esc(l.id)}" title="Talk to Aanya in the browser as this lead">Web call</a>` : ''}
+                        <button class="btn small" data-call="${esc(l.id)}" title="${realCalls ? 'Ring this lead\'s real phone' : 'Start a browser call with Divya, personalised for this lead'}" ${realCalls && (mode() === 'demo' || l.status === 'calling') ? 'disabled' : ''}>${icon('phone')}${realCalls ? (l.status === 'calling' ? 'Calling…' : 'Call phone') : 'Call now'}</button>
+                        ${realCalls ? `<a class="btn btn-ghost small" href="#/talk/${esc(l.id)}" title="Talk to Divya in the browser as this lead">Web call</a>` : ''}
                       </div>`}</td>
                 </tr>`).join('') || `<tr><td colspan="9" class="empty">No leads match.</td></tr>`}
             </tbody>
@@ -89,7 +89,7 @@ export default async function leadsView(el) {
 
     el.querySelectorAll('[data-call]').forEach(b => b.onclick = async () => {
       const lead = leads.find(l => l.id === b.dataset.call);
-      // No paid phone line: open a browser call with Aanya, personalised for this lead.
+      // No paid phone line: open a browser call with Divya, personalised for this lead.
       if (!realCalls) { location.hash = `#/talk/${lead.id}`; return; }
       if (!confirmCall(lead)) return;
       b.disabled = true; b.textContent = 'Starting…';

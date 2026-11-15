@@ -1,4 +1,4 @@
-# n8n for Vaani, running in Docker.
+# n8n for WOW Voice Agent, running in Docker.
 #   docker compose up -d                 → start n8n at http://localhost:5678
 #   npm run n8n:import                   → import the 4 workflows (first time)
 #   docker compose logs -f n8n           → watch logs

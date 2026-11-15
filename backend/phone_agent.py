@@ -1,10 +1,10 @@
-"""Aanya on a REAL phone call using only a free Twilio trial.
+"""Divya on a REAL phone call using only a free Twilio trial.
 
 Twilio's trial won't bridge calls into Vapi, but it does allow its own speech recognition
 (<Gather input="speech">) and voices (<Say>). So the conversation loop runs here:
 
     lead's phone ── Twilio hears them (speech → text) ──► /api/phone/turn
-                                                         │  same Aanya system prompt + Groq LLM
+                                                         │  same Divya system prompt + Groq LLM
     lead's phone ◄── Twilio speaks the reply (Polly Kajal, Indian English/Hindi) ◄┘
 
 Conversation state lives in the `calls` row (vapi_call_id = "tw_<CallSid>"), so it works on
@@ -47,7 +47,7 @@ def compact_prompt() -> str:
     from .campaign import data
     d = data()
     facts = "; ".join(f"{f['k']}: {f['v']}{' (approx.)' if f['src'] == 'web' else ''}" for g in d["facts"] for f in g["items"])
-    return f"""You are Aanya, a Divyasree Developers consultant on an outbound call about Whispers of the Wind, premium "Private Valley" villa plots near Nandi Hills, North Bengaluru. Tone: premium, warm, never pushy. Goal: qualify on 4 checkpoints, short pitch, book a Property Expert call, in 2-3 minutes.
+    return f"""You are Divya, a Divyasree Developers consultant on an outbound call about Whispers of the Wind, premium "Private Valley" villa plots near Nandi Hills, North Bengaluru. Tone: premium, warm, never pushy. Goal: qualify on 4 checkpoints, short pitch, book a Property Expert call, in 2-3 minutes.
 
 RULE 1 — ANSWER QUESTIONS FIRST: if the lead asks anything (price, budget range, amenities, clubhouse, location, distances, nearby schools/hospitals, possession, RERA…), answer it directly in one sentence using FACTS, then ask ONE next question from the flow. Never ignore a question and never push the expert call while the lead is still asking about the property.
 RULE 2 — NEVER INVENT: only state FACTS below. Price range is ninety-two point four lakh to two point four six crore incl. taxes — say it whenever price or budget is asked. For things not in FACTS (exact plot price, EMI, discounts, schools' fees, other projects) say our Property Expert will confirm. NEVER propose a day or time yourself — always ASK the lead what day and time suits them.
@@ -88,7 +88,7 @@ def _first_name(name: str | None) -> str:
 
 def greeting(name: str | None) -> str:
     who = _first_name(name) or "there"
-    return (f"Hello {who}! This is Aanya, a consultant from Divyasree Developers, calling about Whispers of the Wind, "
+    return (f"Hello {who}! This is Divya, a consultant from Divyasree Developers, calling about Whispers of the Wind, "
             "our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?")
 
 
@@ -325,7 +325,7 @@ async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "cu
                         "vapi_call_id")
 
     messages = row.get("messages") or []
-    transcript = "\n".join(("Lead: " if m["role"] == "user" else "Aanya: ") + m["text"] for m in messages)
+    transcript = "\n".join(("Lead: " if m["role"] == "user" else "Divya: ") + m["text"] for m in messages)
     props = LEAD_ANALYSIS_OUTPUT["schema"]["properties"]
     schema_desc = "\n".join(f"- {k}: {v.get('description', '')}{' One of ' + str(v['enum']) if 'enum' in v else ''}" for k, v in props.items())
     try:

@@ -1,4 +1,4 @@
-"""Phone voice library: which voice Aanya uses on real phone calls, chosen in the dashboard.
+"""Phone voice library: which voice Divya uses on real phone calls, chosen in the dashboard.
 
 The voices are Twilio <Say> voices (Google Chirp3-HD, Amazon Polly). They only exist inside Twilio,
 so the dashboard's ▶ Play button opens a tiny browser "call" (Twilio Voice SDK) to our
@@ -21,7 +21,7 @@ from .clients import Supabase
 from .settings import settings
 
 REDIS_KEY = "phone_voice:v1"
-SAMPLE = ("Hello, this is Aanya from Divyasree Developers, calling about Whispers of the Wind, our villa plot "
+SAMPLE = ("Hello, this is Divya from Divyasree Developers, calling about Whispers of the Wind, our villa plot "
           "community near Nandi Hills. Plots start at ninety-two point four lakh. Is this a good time for two minutes?")
 
 
