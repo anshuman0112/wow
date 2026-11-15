@@ -57,7 +57,56 @@ def clean(rows: list[dict]) -> list[dict]:
     return out
 
 
+CONTACTED = {"called", "calling", "queued"}
+
+
+def duplicate_kind(existing: dict) -> str:
+    """What to do when an imported phone number is already a lead (the number identifies the person).
+
+    do_not_call       → never touch or call again
+    re_engaged        → was called and NOT interested, now re-enquired → "Interested again", callable
+    already_contacted → was called and interested / callback booked → skip, no repeat call
+    already_listed    → in the list but not called yet → skip, no second copy
+    """
+    if existing.get("status") == "do_not_call":
+        return "do_not_call"
+    if existing.get("interest") == "cold" and existing.get("status") in CONTACTED | {"re_engaged"}:
+        return "re_engaged"
+    if existing.get("status") in CONTACTED or (existing.get("attempts") or 0) > 0 and existing.get("interest"):
+        return "already_contacted"
+    return "already_listed"
+
+
 async def import_leads(sb: Supabase, rows: list[dict]) -> dict:
+    """Add new leads; never create a second copy of a phone number. Report every duplicate by name."""
+    from datetime import datetime, timezone
     leads = clean(rows)
-    saved = await sb.upsert("leads", leads, "phone", ignore_duplicates=True, returning=True) if leads else []
-    return {"received": len(rows), "imported": len(saved), "skipped": len(rows) - len(saved)}
+    in_file_dupes = len(rows) - len(leads) - sum(1 for r in rows if not normalise_phone(r.get("phone")))
+    existing: dict[str, dict] = {}
+    phones = [l["phone"] for l in leads]
+    for i in range(0, len(phones), 100):   # look up existing numbers in batches
+        chunk = ",".join(f'"{p}"' for p in phones[i:i + 100])
+        for e in await sb.select("leads", {"select": "id,name,phone,status,interest,attempts,notes",
+                                           "phone": f"in.({chunk})"}):
+            existing[e["phone"]] = e
+
+    report: dict[str, list[dict]] = {"re_engaged": [], "already_contacted": [], "already_listed": [], "do_not_call": []}
+    new = [l for l in leads if l["phone"] not in existing]
+    now = datetime.now(timezone.utc)
+    for l in leads:
+        e = existing.get(l["phone"])
+        if not e:
+            continue
+        kind = duplicate_kind(e)
+        report[kind].append({"name": e.get("name") or l.get("name") or "Unknown", "status": e.get("status"),
+                             "interest": e.get("interest")})
+        if kind == "re_engaged":   # same person came back: flag them so the team calls again
+            note = f"Re-enquired {now:%d %b %Y} via {l.get('source') or 'import'}"
+            await sb.update("leads", {"id": f"eq.{e['id']}"}, {
+                "status": "re_engaged", "re_engaged_at": now.isoformat(),
+                "notes": f"{e['notes']} | {note}" if e.get("notes") else note})
+
+    saved = await sb.upsert("leads", new, "phone", ignore_duplicates=True, returning=True) if new else []
+    return {"received": len(rows), "imported": len(saved), "new": [s.get("name") or s["phone"][-4:] for s in saved],
+            "duplicates_in_file": max(in_file_dupes, 0),
+            "invalid": sum(1 for r in rows if not normalise_phone(r.get("phone"))), **report}

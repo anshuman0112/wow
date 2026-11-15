@@ -46,14 +46,15 @@ export async function addLeads(rows) {
       mem.leads.unshift({ id: 'L-' + (2000 + mem.leads.length), status: 'new', interest: null, attempts: 0, created_at: new Date().toISOString(), ...r });
       n++;
     }
-    return n;
+    return { imported: n, new: [], re_engaged: [], already_contacted: [], already_listed: [], do_not_call: [] };
   }
   // The browser never writes to the database directly: the Python API saves leads with the service key.
   const res = await fetch(`${config.apiBaseUrl}/leads/import`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leads: rows }),
   });
   if (!res.ok) throw new Error(`Lead import failed (${res.status})`);
-  return (await res.json()).imported ?? rows.length;
+  // { imported, new, re_engaged, already_contacted, already_listed, do_not_call }: every duplicate, by name
+  return await res.json();
 }
 
 // Ask the Python API to ring one lead's real phone (Twilio bridge or Vapi number).

@@ -33,7 +33,7 @@ create table if not exists leads (
   notes           text,
   source          text,                              -- file name it came from
   status          text not null default 'new'
-                  check (status in ('new','queued','calling','called','no_answer','do_not_call')),
+                  check (status in ('new','queued','calling','called','no_answer','do_not_call','re_engaged')),
   interest        text check (interest in ('hot','warm','cold')),
   attempts        int  not null default 0,
   last_called_at  timestamptz,
@@ -41,6 +41,7 @@ create table if not exists leads (
   extra           jsonb not null default '{}'::jsonb, -- unmapped columns are kept here
   created_at      timestamptz not null default now()
 );
+alter table leads add column if not exists re_engaged_at timestamptz;   -- set when a not-interested lead re-enquires
 create index if not exists leads_status_idx on leads (status, attempts);
 
 -- 3. Calls: one row per finished call (written by n8n WF4)
@@ -83,7 +84,8 @@ create index if not exists calls_started_idx on calls (started_at desc);
 create or replace view leads_public as
   select id, campaign_id, name,
          left(phone, 3) || ' xxxxx ' || right(phone, 3) as phone,
-         location, budget, source, status, interest, attempts, last_called_at, callback_time, created_at
+         location, budget, source, status, interest, attempts, last_called_at, callback_time, created_at,
+         re_engaged_at
   from leads;
 
 create or replace view calls_public as
@@ -115,4 +117,8 @@ values ('divyasree-wow', 'Whispers of the Wind', 'Divyasree Developers', 'Divya'
 on conflict (id) do nothing;
 
 -- Upgrade for existing projects
+-- "Interested again": a lead who was not interested re-enquires (same phone number in a new import)
+alter table leads drop constraint if exists leads_status_check;
+alter table leads add constraint leads_status_check
+  check (status in ('new','queued','calling','called','no_answer','do_not_call','re_engaged'));
 alter table campaigns add column if not exists phone_voice text;

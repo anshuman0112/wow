@@ -18,6 +18,17 @@ export const voices = (() => {
   return [...pinned, ...rest];
 })();
 
+// The browser-call voice chosen on the Voices page (per browser; phone calls use their own voice).
+const BROWSER_VOICE_KEY = 'wow-browser-voice';
+export function browserVoice() {
+  let id = null;
+  try { id = localStorage.getItem(BROWSER_VOICE_KEY); } catch {}
+  return voices.find(v => v.id === id) || voices[0];
+}
+export function setBrowserVoice(id) {
+  try { localStorage.setItem(BROWSER_VOICE_KEY, id); } catch {}
+}
+
 // Voice settings shared with the Python backend (backend/vapi_assistant.py builds the same object).
 export function voiceConfig(voiceId = voices[0].id) {
   return {

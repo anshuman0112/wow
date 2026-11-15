@@ -11,6 +11,7 @@ export default async function leadsView(el) {
   const realCalls = await phoneCalling();   // true when the Python backend has a phone line (Twilio bridge / Vapi number)
   let filter = 'all', q = '';
   let pending = null; // { file, rows, headers, mapping }
+  let report = null;  // last import result: who was added, who was a duplicate and why
 
   const draw = () => {
     const shown = leads.filter(l =>
@@ -24,6 +25,7 @@ export default async function leadsView(el) {
       </div>
 
       ${realCalls && mode() !== 'demo' ? verifyPanel() : ''}
+      ${report ? importReport(report) : ''}
       <section class="card" style="margin-bottom:16px">
         <div class="card-head"><div><h2>Import leads</h2><p class="muted small">CSV, Excel (.xlsx / .xls), JSON or SQL INSERT dumps — columns are detected automatically</p></div></div>
         <div class="card-pad">
@@ -48,7 +50,7 @@ export default async function leadsView(el) {
       <section class="card">
         <div class="toolbar">
           <div class="seg" role="group" aria-label="Filter leads">
-            ${[['all', 'All'], ['new', 'New'], ['hot', 'Hot'], ['warm', 'Warm'], ['cold', 'Cold'], ['do_not_call', 'Do not call']]
+            ${[['all', 'All'], ['new', 'New'], ['re_engaged', 'Interested again'], ['hot', 'Hot'], ['warm', 'Warm'], ['cold', 'Cold'], ['do_not_call', 'Do not call']]
               .map(([k, v]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${v}</button>`).join('')}
           </div>
           <span class="spacer"></span>
@@ -64,7 +66,7 @@ export default async function leadsView(el) {
                   <td class="mono">${esc(l.phone)}</td>
                   <td>${esc(l.location || '—')}</td>
                   <td>${esc(l.budget || '—')}</td>
-                  <td>${statusBadge(l.status)}</td>
+                  <td>${statusBadge(l.status)}${l.status === 're_engaged' && l.re_engaged_at ? `<div class="cell-sub">came back ${fmtDate(l.re_engaged_at)}</div>` : ''}</td>
                   <td>${interestBadge(l.interest)}</td>
                   <td>${esc(l.callback_time || '—')}</td>
                   <td class="cell-sub">${esc(l.source || '—')}<br>${fmtDate(l.created_at)}</td>
@@ -107,9 +109,10 @@ export default async function leadsView(el) {
       if (!phone) { err.textContent = 'Enter a valid phone number (10 digits, or with country code like +91…).'; return; }
       err.textContent = '';
       try {
-        const n = await addLeads([{ name: f.name?.trim() || null, phone, location: f.location?.trim() || null, source: 'added by hand', extra: {} }]);
+        report = await addLeads([{ name: f.name?.trim() || null, phone, location: f.location?.trim() || null, source: 'added by hand', extra: {} }]);
         leads = await getLeads();
-        toast(n ? 'Lead added' : 'That phone number is already in your leads');
+        toast(report.imported ? 'Lead added' : 'That phone number is already a lead — see the summary above');
+        if (report.imported) report = null;
         draw();
       } catch (ex) { err.textContent = ex.message; }
     };
@@ -131,12 +134,17 @@ export default async function leadsView(el) {
     if (go) go.onclick = async () => {
       const { leads: clean, invalid, dupes } = cleanRows(pending.rows, pending.mapping, pending.file);
       go.disabled = true;
-      let added;
-      try { added = await addLeads(clean); } catch (e) { toast(e.message); go.disabled = false; return; }
+      let res;
+      try { res = await addLeads(clean); } catch (e) { toast(e.message); go.disabled = false; return; }
       leads = await getLeads();
-      toast(`Imported ${added} · ${dupes.length + (clean.length - added)} duplicates · ${invalid.length} without a valid phone`);
+      const nameCol = Object.keys(pending.mapping).find(c => pending.mapping[c] === 'name');
+      report = { ...res, file: pending.file, invalid: invalid.length,
+                 in_file: dupes.map(r => (nameCol && r[nameCol]) || 'Unnamed row') };
+      toast(`Imported ${res.imported} new lead${res.imported === 1 ? '' : 's'} — see the summary above`);
       pending = null; draw();
     };
+    const closeReport = el.querySelector('#close-report');
+    if (closeReport) closeReport.onclick = () => { report = null; draw(); };
   };
 
   const load = async file => {
@@ -152,6 +160,34 @@ export default async function leadsView(el) {
 
   draw();
   return () => stopPolling();
+}
+
+// After an import: who was added and, for every duplicate phone number, what happened and why.
+function importReport(r) {
+  const names = list => list.map(x => esc(typeof x === 'string' ? x : x.name)).join(', ');
+  const groups = [
+    ['re_engaged', 'b-hot', 'Interested again', 'They were called before and were not interested; now they enquired again. Marked "Interested again", so call them.'],
+    ['already_contacted', 'b-ok', 'Already contacted — skipped', 'Called before and interested or callback booked. Not added again, so they are not called twice.'],
+    ['already_listed', 'b-brand', 'Already in your list — skipped', 'Same phone number is already a lead (not called yet). No second copy added.'],
+    ['do_not_call', 'b-bad', 'Do not call — skipped', 'They asked not to be called. Left untouched.'],
+    ['in_file', '', 'Duplicate inside this file — skipped', 'Same phone number appears more than once in the file; only the first was used.'],
+  ].filter(([k]) => (r[k] || []).length);
+  return `
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head"><div><h2>Import result${r.file ? ` · ${esc(r.file)}` : ''}</h2>
+        <p class="muted small">Duplicates are matched by phone number: the same number is always the same person.</p></div>
+        <span class="spacer"></span><button class="btn btn-ghost small" id="close-report">Close</button></div>
+      <div class="card-pad stack" style="gap:12px">
+        <div><span class="badge b-ok">${r.imported} new</span>
+          ${r.new?.length ? `<span class="small muted" style="margin-left:8px">${names(r.new)}</span>` : ''}
+          ${r.invalid ? `<span class="badge" style="margin-left:8px">${r.invalid} without a valid phone</span>` : ''}</div>
+        ${groups.map(([k, cls, title, why]) => `
+          <div><span class="badge ${cls}">${r[k].length} · ${title}</span>
+            <div class="small" style="margin-top:4px">${names(r[k])}</div>
+            <div class="muted small">${why}</div></div>`).join('')}
+        ${groups.length ? '' : '<div class="muted small">No duplicates found.</div>'}
+      </div>
+    </section>`;
 }
 
 // Real calls ring a real phone — always confirm first.

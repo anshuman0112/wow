@@ -74,7 +74,7 @@ flowchart LR
 
 | Part | Tool (all free tiers) | Job |
 |---|---|---|
-| Dashboard | Plain HTML + JS | Overview, Talk to Divya, Phone voices, Leads, Calls, Campaign, Checklist |
+| Dashboard | Plain HTML + JS | Overview, Talk to Divya, Voices, Leads, Calls, Campaign, Checklist |
 | Backend | **Python FastAPI** on Vercel | Saves calls, imports leads, places phone calls, runs the phone conversation |
 | Browser calls | **Vapi** (Deepgram nova-3, GPT-4.1-mini, ElevenLabs Flash v2.5) | Low-latency voice demo with interruptions, English + Hindi |
 | Phone calls | **Twilio** trial | Rings the lead, turns speech into text, and speaks with a premium voice (Google Chirp3-HD) |
@@ -97,8 +97,8 @@ flowchart LR
 | Page | What you can do |
 |---|---|
 | **Talk to Divya** | Talk to her in the browser, as a generic lead or as a lead from your list (`#/talk/<leadId>`). |
-| **Phone voices** | Press ▶ to hear 7 phone voices, and pick the one used on every phone call. |
-| **Leads** | Import any lead file (columns are detected automatically), add a lead by hand, verify a number, or press **Call phone**. |
+| **Voices** | Two sections: **Phone calls** (press ▶ to hear 7 Twilio voices and pick one) and **Browser calls** (pick Riya, Sia or Anika for Talk to Divya). |
+| **Leads** | Import any lead file (columns are detected automatically), add a lead by hand, verify a number, or press **Call phone**. Duplicates are matched by phone number: nobody is added or called twice, and a lead who was not interested but enquires again is marked **Interested again**. |
 | **Calls** | See each call's transcript, summary, score, checkpoints and callback time. |
 | **Campaign & knowledge** | Facts, flow, edge cases and pronunciation: everything Divya knows. |
 | **Assignment checklist** | Every requirement of the brief and where it is covered. |

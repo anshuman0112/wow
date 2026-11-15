@@ -33,7 +33,7 @@ const sections = [
   ]},
   { title: 'Extras beyond the brief', items: [
     ['Real phone calls to leads', 'Leads → Call phone (free Twilio trial); reviewers verify their number on the Leads page first', 'done'],
-    ['Phone voice library', 'Phone voices page: 7 voices, play in the browser, choose the one calls use', 'done'],
+    ['Phone voice library', 'Voices page: 7 phone voices with ▶ preview + 3 browser voices, one clear place to choose both', 'done'],
     ['Every call, transcript and summary stored', 'Python API (FastAPI) saves calls to Supabase with AI summary, interest and checkpoints', 'done'],
     ['Automatic hot / warm / cold scoring and mood tracking', 'AI analysis after each call → Calls page', 'done'],
     ['Zero-token answers for most-asked questions', 'Redis FAQ cache (price, amenities, schools, hospitals, location, RERA, payment...)', 'done'],

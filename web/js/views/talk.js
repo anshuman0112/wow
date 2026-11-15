@@ -1,6 +1,6 @@
 // Live browser call with Divya via the Vapi Web SDK (this is the shareable demo link).
 import { config, isLive } from '../config.js';
-import { voices, voiceConfig } from '../campaign-data.js';
+import { voices, voiceConfig, browserVoice } from '../campaign-data.js';
 import { getCalls, getLeads } from '../store.js';
 import { esc, icon, toast, statusBadge } from '../ui.js';
 
@@ -37,12 +37,8 @@ export default async function talk(el, [leadId] = []) {
           <div class="row" style="justify-content:center;gap:12px">
             ${live ? `<label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Your first name (optional)
               <input class="input" id="caller" maxlength="40" placeholder="e.g. Rahul" value="${esc(firstName)}" style="width:180px;text-align:center"></label>` : ''}
-            <label class="small muted" style="display:flex;flex-direction:column;gap:4px;align-items:center">Divya's voice
-              <select class="input" id="voice" style="width:180px">
-                ${voices.map(v => `<option value="${v.id}">${esc(v.name)} — ${esc(v.languages)}</option>`).join('')}
-              </select></label>
           </div>
-          <p class="muted small" id="voice-style" style="margin-top:-6px">${esc(voices[0].style)}</p>
+          <p class="muted small" style="margin-top:-6px">Voice for this browser call: <b>${esc(browserVoice().name)}</b> · <a href="#/voices">change on the Voices page</a></p>
           <div class="row" style="justify-content:center">
             <button class="btn btn-primary" id="start">${icon('phone')}${live ? 'Start call' : 'Replay sample call'}</button>
             <button class="btn" id="mute" hidden>${icon('micOff')}Mute</button>
@@ -116,7 +112,7 @@ export default async function talk(el, [leadId] = []) {
       });
       vapi.on('error', e => { console.error(e); toast('Call error — check the Vapi keys'); setState('ended'); });
       const name = (el.querySelector('#caller')?.value || '').trim();
-      const voiceId = el.querySelector('#voice')?.value || voices[0].id;
+      const voiceId = browserVoice().id;
       const overrides = { voice: voiceConfig(voiceId), metadata: { campaign_id: 'divyasree-wow', voice: voiceId, ...(lead ? { lead_id: lead.id } : {}) } };
       const vars = {};
       if (name) vars.name = name;
@@ -150,7 +146,6 @@ export default async function talk(el, [leadId] = []) {
     if (!demoStop) setState('ended');
   }
 
-  $('voice').onchange = e => { $('voice-style').textContent = voices.find(v => v.id === e.target.value)?.style || ''; };
   $('start').onclick = () => { transcript.length = 0; $('tx').innerHTML = ''; live ? startLive() : startDemo(); };
   $('stop').onclick = () => { demoStop = true; vapi?.stop(); setState('ended'); };
   $('mute').onclick = () => { muted = !muted; vapi?.setMuted(muted); $('mute').innerHTML = `${icon(muted ? 'mic' : 'micOff')}${muted ? 'Unmute' : 'Mute'}`; };

@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { esc, icon, toast } from '../ui.js';
+import { voices as browserVoices, browserVoice, setBrowserVoice } from '../campaign-data.js';
 
 // Phone voice library: listen to each voice (▶ plays the exact Twilio voice in the browser) and pick
 // the one Divya uses on every real phone call.
@@ -42,9 +43,10 @@ export default async function voices(el) {
   const render = () => {
     el.innerHTML = `
       <div class="page-head">
-        <div><h1>Phone voices</h1>
-        <p class="muted">Choose Divya's voice for real phone calls. Press ▶ to hear exactly what a lead hears.</p></div>
+        <div><h1>Voices</h1>
+        <p class="muted">Divya talks through two different systems, and each has its own voices. Pick one for each.</p></div>
       </div>
+      <h2 style="margin:4px 0 10px">📞 Phone calls <span class="muted small" style="font-weight:400">· real calls to a lead's phone (Twilio voices)</span></h2>
       <div class="banner">${icon('info')}<span>Previews play through your speakers via Twilio. Your browser may ask for
         microphone permission once: it is only needed to open the audio line, nothing is recorded.
         Phone networks carry 8 kHz audio, so the HD voices are the clearest choice.</span></div>
@@ -63,6 +65,24 @@ export default async function voices(el) {
                 ${icon('check')}<span>${inUse ? 'Selected' : 'Use this voice'}</span></button>
             </div>
           </section>`; }).join('')}
+      </div>
+      <h2 style="margin:28px 0 6px">🌐 Browser calls <span class="muted small" style="font-weight:400">· "Talk to Divya" in the browser (ElevenLabs voices via Vapi)</span></h2>
+      <p class="muted small" style="margin-bottom:10px">Saved in this browser. To hear one, choose it and start a call on Talk to Divya.</p>
+      <div class="grid g-3">
+        ${browserVoices.map(v => {
+          const inUse = v.id === browserVoice().id;
+          return `
+          <section class="card card-pad" style="${inUse ? 'outline:2px solid var(--brand, #8a6d3b)' : ''}">
+            <div class="row"><h2>${esc(v.name)}</h2><span class="spacer"></span>
+              ${inUse ? '<span class="badge b-ok">In use</span>' : ''}</div>
+            <p class="muted" style="margin-top:6px">${esc(v.style || '')}</p>
+            <p class="small faint" style="margin-top:6px">${esc(v.languages || '')}</p>
+            <div class="row" style="margin-top:12px;gap:8px">
+              ${v.previewUrl ? `<audio controls preload="none" src="${esc(v.previewUrl)}" style="height:32px;max-width:100%"></audio>` : ''}
+              <button class="btn ${inUse ? '' : 'btn-primary'}" data-buse="${esc(v.id)}" ${inUse ? 'disabled' : ''}>
+                ${icon('check')}<span>${inUse ? 'Selected' : 'Use this voice'}</span></button>
+            </div>
+          </section>`; }).join('')}
       </div>`;
   };
   render();
@@ -74,7 +94,13 @@ export default async function voices(el) {
   });
 
   el.addEventListener('click', async e => {
-    const play = e.target.closest('[data-play]'), use = e.target.closest('[data-use]');
+    const play = e.target.closest('[data-play]'), use = e.target.closest('[data-use]'), buse = e.target.closest('[data-buse]');
+    if (buse) {
+      setBrowserVoice(buse.dataset.buse);
+      toast(`Browser calls will now use ${browserVoice().name}`);
+      render();
+      return;
+    }
     if (play) {
       const id = play.dataset.play;
       const wasPlaying = current && current._voice === id;

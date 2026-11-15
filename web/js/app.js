@@ -12,7 +12,7 @@ import integrations from './views/integrations.js';
 const routes = [
   { path: 'overview', label: 'Overview', icon: 'home', view: overview },
   { path: 'talk', label: 'Talk to Divya', icon: 'mic', view: talk },
-  { path: 'voices', label: 'Phone voices', icon: 'play', view: voicesView },
+  { path: 'voices', label: 'Voices', icon: 'play', view: voicesView },
   { path: 'leads', label: 'Leads', icon: 'users', view: leads },
   { path: 'calls', label: 'Calls', icon: 'history', view: calls },
   { section: 'Setup' },
