@@ -106,6 +106,17 @@ async def main() -> None:
         check(r2[0] == 200 and valid(r2[1]) and "once more" not in r2[1], "race: instant + normal 'okay' together -> one clean reply",
               f"partial={r1} | turn says: {says(r2[1])[:70]}")
 
+        # More instant answers (each is a complete answer, so no silence wait), and phrases that must NOT be instant.
+        for text, should in [("I'm busy right now", True), ("it's for investment", True), ("no", False),
+                             ("no but tell me the price", False), ("yes but what is the", False)]:
+            r = await partial(text)
+            fired = ("answered" in r or "redirect-failed" in r or "taken" in r)
+            check(fired == should, f"instant for {text!r}: {'yes' if should else 'no'}", r)
+            if fired:   # let the instant reply 'start' (Twilio fetches it) before the next phrase
+                async with httpx.AsyncClient(timeout=30) as h:
+                    il = ((await cache.get_session(h, SID)) or {}).get("raw", {}).get("instant_last") or {}
+                await post(f"/api/phone/next?n={il.get('n', 0)}", {})
+
         st, x, ms, srv = await post("/api/phone/turn?lead=&silence=1", {})
         check(st == 200 and "still there" in x, "silence -> 'Are you still there?'", says(x))
 

@@ -293,7 +293,7 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
         speech = f"{raw.pop('pending')} {speech.strip()}"
     il = raw.get("instant_last")
     if il and time.time() - il.get("t", 0) < 10:
-        said = re.sub(r"[^a-z ]", " ", speech.lower()).split()
+        said = _norm_words(speech)
         if said[:len(il["words"].split())] == il["words"].split() and len(said) <= len(il["words"].split()) + 2:
             # Twilio's normal result for the same "yes" the instant path already answered: don't answer twice.
             raw.pop("instant_last", None)
@@ -517,18 +517,33 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     return out
 
 
-# Short, complete answers that are safe to act on the moment they are heard. Anything longer waits
-# for the normal end of speech.
-INSTANT = re.compile(r"^(yes|yeah|yep|yes please|yes sure|sure|ok|okay|okay sure|go ahead|tell me|yes tell me|"
-                     r"haan|haan ji|ha|ji|ji haan|haanji|theek hai|bilkul|of course|absolutely|right|correct|"
-                     r"yes it is|yes yes|yeah sure|yes go ahead)$")
+# Short, COMPLETE answers that are safe to act on the moment they are heard (no silence wait). Anything
+# else waits for Twilio's normal end of speech. A bare "no" is excluded on purpose: people usually go on
+# ("no, but tell me the price…") and answering early would cut them off.
+_A = r"(yes|yeah|yep|yup|sure|ok|okay|haan|ha|han|ji|haan ji|ji haan|haanji|theek hai|thik hai|bilkul|of course|absolutely|"      r"right|correct|go ahead|tell me|fine|perfect|great|sounds good|yes please|alright|all right)"
+INSTANT = re.compile(
+    rf"^({_A}( {_A})*"
+    r"|(yes |yeah |okay |ok |no )?(call me later|call later|call me back later|call back later|call me tomorrow|"
+    r"(i am |im )?busy( right now| now| at the moment)?|not now|not right now|"
+    r"not a good time|baad mein|baad mein call karo|abhi busy hoon|later please)"
+    r"|(yes |no |it is |its |for |as an? |its for |it is for )?(investment|for investment|an investment|weekend home|a weekend home|"
+    r"self use|own use|for self use|both|living|to live|for living)"
+    r"|(yes |yeah |ok |okay )?(i am |im )?(comfortable|fine|okay with it|ok with it|fine with it|that works|it works|"
+    r"thats fine|works for me|that is fine)"
+    r"|(no |no thanks |sorry )?((i am |im )?not interested|no thanks|no thank you))$")
+
+
+def _norm_words(text: str | None) -> list[str]:
+    """'I'm busy.' -> ['im', 'busy'] (apostrophes dropped, punctuation removed)."""
+    t = (text or "").lower().replace("'", "").replace("’", "")
+    return re.sub(r"[^a-z ]", " ", t).split()
 
 
 async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: str) -> str:
     """Twilio's live words while the lead speaks. A plain "yes" is answered NOW: the reply is prepared,
     then the call is moved to it (Twilio REST), skipping the silence wait at the end of speech."""
-    words = re.sub(r"[^a-z ]", " ", (heard or "").lower()).split()
-    if not words or len(words) > 3 or not INSTANT.match(" ".join(words)):
+    words = _norm_words(heard)
+    if not words or len(words) > 6 or not INSTANT.match(" ".join(words)):
         return "ignored"
     sb, groq = Supabase(http), Groq(http)
     row, _ = await asyncio.gather(load_session(http, sb, call_sid), cache.get_quota(http))
