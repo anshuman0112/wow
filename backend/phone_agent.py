@@ -394,7 +394,7 @@ def speakable(text: str) -> str:
 # Twilio's trial announcement is sometimes transcribed as the lead's first words — it isn't them.
 TRIAL_NOISE = re.compile(r"no longer being recorded|trial account|press any key|free trial|twilio", re.I)
 
-DUPLICATE_WINDOW_S = 4   # same words again within this time = a delivery copy, not a new answer
+DUPLICATE_WINDOW_S = 1.0   # same words again within 1 s = a delivery copy (retries arrive within ms; a real answer takes seconds)
 REPLY_BUDGET_S = 2.5   # max time we let the AI think on a live call before falling back to the script
 REPLY_MAX_TOKENS = 250  # replies are 1-2 sentences (+ a little reasoning); a smaller cap also uses less of the free per-minute quota
 HISTORY_WINDOW = 12   # last ~6 exchanges: enough context, bounded token cost on long calls
@@ -575,6 +575,8 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
         out["end"] = False   # Divya is still asking something: never hang up on an open question
     if reply and "?" not in reply and not out.get("end"):
         reply = f"{reply} {faq.next_question(messages + [{'role': 'assistant', 'text': reply}], out.get('lang') or lang)}"
+    if re.search(r"have a lovely day|din shubh ho", reply.lower()) and not reply.rstrip().endswith("?"):
+        out["end"] = True   # a polite close (e.g. no expert-call time after three asks) ends the call
     out["reply"] = reply   # never leave the lead in dead air: every turn ends with the next question
     print(f"[phone] {out.get('_usage')} latency_s={out.get('_latency_s')}", flush=True)
     return out

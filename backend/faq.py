@@ -167,16 +167,47 @@ def covered(messages: list[dict]) -> set[str]:
     return c
 
 
+# After the pitch the only goal is the Property Expert call time (the PDF's CTA). Asked in two wordings so it
+# never sounds like a loop; after three asks without a time, Divya closes politely instead of repeating.
+TIME_ASK = {
+    "en": ["What day and time would suit you for a short call with our Property Expert?",
+           "When should our Property Expert call you? Just tell me a day and a time that works for you."],
+    "hi": ["Hamare Property Expert ke saath short call ke liye aapko kaunsa din aur time theek rahega?",
+           "Hamare Property Expert aapko kab call karein? Bas ek din aur time bata dijiye."],
+}
+CTA_CLOSE = {
+    "en": "No problem at all. Our Property Expert will reach out at a convenient time. Thank you for your time, and have a lovely day!",
+    "hi": "Koi baat nahi. Hamare Property Expert aapko suvidha ke time par call karenge. Aapke time ke liye dhanyavaad, aapka din shubh ho!",
+}
+_TIME_ASKED = re.compile(r"(day and (a )?time|din aur time|kab call karein|what day|kaunsa din)", re.I)
+
+
+def cta_question(messages: list[dict], lang: str) -> str:
+    asked = sum(1 for m in messages if m["role"] == "assistant" and _TIME_ASKED.search(m["text"]))
+    if asked >= 3:
+        return CTA_CLOSE[lang]
+    last = next((m["text"] for m in reversed(messages) if m["role"] == "assistant"), "")
+    options = TIME_ASK[lang]
+    pick = options[asked % 2]
+    return options[(asked + 1) % 2] if pick in last else pick
+
+
 def next_question(messages: list[dict], lang: str) -> str:
     done = covered(messages)
     nq = _questions()
+    if "pitch" in done and "callback" not in done:
+        return cta_question(messages, lang)
     # Don't repeat a question we asked in the last two replies — if the lead skipped it, move on.
     recent = " ".join(m["text"] for m in messages[-4:] if m["role"] == "assistant")
     pending = [s for s in ("intent", "geography", "budget", "timeline", "decision", "pitch", "callback") if s not in done]
     for step in pending:
+        if step == "callback":
+            return cta_question(messages, lang)
         if nq[step][lang] not in recent and nq[step]["en"] not in recent:
             return nq[step][lang]
-    return nq[pending[0] if pending else "callback"][lang]
+    if not pending or pending[0] == "callback":
+        return cta_question(messages, lang)
+    return nq[pending[0]][lang]
 
 
 def answer(intents: list[str], lang: str, cached: dict[str, str] | None = None) -> str:
@@ -314,7 +345,12 @@ def fallback_reply(messages: list[dict], lang: str) -> str:
         lead_in = "That's a good question; our Property Expert will share the exact details." if lang == "en" else \
                   "Achha sawaal hai; exact details hamare Property Expert batayenge."
         return f"{lead_in} {next_question(messages, lang)}"
-    return f"{'Understood.' if lang == 'en' else 'Samajh gayi.'} {next_question(messages, lang)}"
+    nxt = next_question(messages, lang)
+    if nxt.startswith(("No problem", "Koi baat nahi")):
+        return nxt   # a polite close carries its own opener
+    turn = sum(1 for m in messages if m["role"] == "user")
+    opener = (["Perfect.", "Got it.", "Great.", "Understood."] if lang == "en" else ["Theek hai.", "Samajh gayi.", "Bahut badhiya."])
+    return f"{opener[turn % len(opener)]} {nxt}"
 
 
 # ── guardrails applied to every LLM reply ───────────────────────────────────
@@ -340,8 +376,10 @@ def no_reask(reply: str, messages: list[dict], lang: str) -> str:
     checkpoint the lead has already answered; respond() then adds the next unanswered one."""
     done = covered(messages)
     sentences = re.split(r"(?<=[.!?])\s+", reply.strip())
-    keep = [x for x in sentences if not (x.endswith("?") and any(
-        step in done and re.search(ASKED[step], x.lower()) for step in ("intent", "geography", "budget", "timeline", "decision")))]
+    after_pitch = "pitch" in done and "callback" not in done
+    keep = [x for x in sentences if not (x.endswith("?") and (any(
+        step in done and re.search(ASKED[step], x.lower()) for step in ("intent", "geography", "budget", "timeline", "decision"))
+        or (after_pitch and re.search(r"anything else|aur kuch", x.lower()))))]   # after the pitch: ask for the time instead
     return " ".join(keep) if keep else reply
 
 
