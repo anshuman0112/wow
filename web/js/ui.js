@@ -41,6 +41,7 @@ export function statusBadge(v) {
     new: ['New', 'b-brand'], queued: ['Queued', 'b-gold'], calling: ['Calling', 'b-gold'],
     called: ['Called', 'b-ok'], no_answer: ['No answer', ''], do_not_call: ['Do not call', 'b-bad'],
     re_engaged: ['Interested again', 'b-hot'],
+    callback: ['Call-back', 'b-gold'],
   }[v] || [v || '—', ''];
   return `<span class="badge ${m[1]}">${m[0]}</span>`;
 }

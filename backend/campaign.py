@@ -58,6 +58,8 @@ LEAD_ANALYSIS_OUTPUT = {
             "language": {"type": "string", "enum": ["English", "Hindi", "Hinglish", "Other"]},
             "callback_time": {"type": "string", "description": "Agreed day/time for the Property Expert call, or empty if none."},
             "do_not_call": {"type": "boolean", "description": "True if the lead asked not to be contacted again."},
+            "lead_busy": {"type": "boolean", "description": "True if the lead said they were busy / it was not a good time to talk and wanted to be called later."},
+            "call_back_request": {"type": "string", "description": "If the lead asked Divya to call them back later, exactly when they said, in their words (e.g. 'tomorrow 5 pm', 'after 2 hours', 'kal shaam 6 baje', 'Monday morning'). Empty if they did not. This is NOT the Property Expert call."},
         },
         "required": ["summary", "interest", "sentiment_end", "do_not_call"],
     },

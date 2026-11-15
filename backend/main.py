@@ -185,6 +185,41 @@ async def phone_verify_status(phone_number: str = Query(alias="phone", max_lengt
     return {"verified": await phone.is_verified(http, phone_number)}
 
 
+# ── Automatic call-backs (busy leads) ────────────────────────────────────────
+@app.api_route("/api/dialer/tick", methods=["GET", "POST"])
+async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key: str | None = Header(default=None),
+                      http: httpx.AsyncClient = Depends(http_client)):
+    """Called every few minutes by the scheduler: dial every lead whose call-back time has come.
+    Safe to call any time: it only ever dials leads that are due, at most 3 per run, inside calling hours."""
+    import os
+    from . import callbacks
+    secret = os.environ.get("DIALER_SECRET", "")
+    if secret and not hmac.compare_digest(x_dialer_key or key, secret):
+        raise HTTPException(401, "bad dialer key")
+    now = datetime.now(timezone.utc)
+    if not callbacks.is_calling_hours(now):
+        return {"dialled": [], "reason": "outside calling hours (9 am - 9 pm IST)"}
+    sb = Supabase(http)
+    due = await sb.select("leads", {"select": "id,name,status,callback_tries", "status": "in.(callback,no_answer)",
+                                    "next_call_at": f"lte.{now.isoformat()}", "order": "next_call_at.asc", "limit": "3"})
+    done = []
+    for lead in due:
+        # Claim it first (clears the time) so two scheduler runs can never dial the same lead twice.
+        is_callback = lead["status"] == "callback"   # else: a no-answer re-attempt
+        claim = {"next_call_at": None}
+        if is_callback:
+            claim["callback_tries"] = (lead.get("callback_tries") or 0) + 1
+        await sb.update("leads", {"id": f"eq.{lead['id']}", "status": f"eq.{lead['status']}"}, claim)
+        try:
+            res = await phone.call_lead(http, lead["id"], callback=is_callback)
+            done.append({"lead": lead.get("name"), "ok": True, "kind": "call-back" if is_callback else "re-attempt",
+                         "call": res.get("id")})
+        except phone.CallError as e:
+            await sb.update("leads", {"id": f"eq.{lead['id']}"}, {"callback_note": f"automatic call failed: {str(e)[:120]}"})
+            done.append({"lead": lead.get("name"), "ok": False, "error": str(e)[:160]})
+    return {"dialled": done, "checked_at": now.isoformat()}
+
+
 # ── Phone conversation loop (free Twilio trial): Twilio speech ⇄ Python ⇄ Groq ──────
 async def twilio_form(request: Request) -> dict[str, str]:
     """Parse Twilio's form POST and verify X-Twilio-Signature (proves the request came from Twilio)."""
@@ -221,10 +256,11 @@ def _xml(content: str) -> Response:
 
 
 @app.post("/api/phone/start")
-async def phone_start(request: Request, lead: str = Query(default="", max_length=64),
+async def phone_start(request: Request, lead: str = Query(default="", max_length=64), cb: int = 0,
                       http: httpx.AsyncClient = Depends(http_client)):
     form = await twilio_form(request)
-    return _xml(await phone_agent.start(http, form.get("CallSid", ""), _uuid_or_blank(lead), form.get("To")))
+    return _xml(await phone_agent.start(http, form.get("CallSid", ""), _uuid_or_blank(lead), form.get("To"),
+                                        callback=bool(cb)))
 
 
 @app.post("/api/phone/turn")
@@ -236,7 +272,7 @@ async def phone_turn(request: Request, lead: str = Query(default="", max_length=
 
 
 @app.post("/api/phone/status")
-async def phone_status(request: Request, lead: str = Query(default="", max_length=64),
+async def phone_status(request: Request, lead: str = Query(default="", max_length=64), cb: int = 0,
                        http: httpx.AsyncClient = Depends(http_client)):
     """Twilio reports the call ended (hang-up, no answer, busy…): analyse + save, or mark no-answer."""
     form = await twilio_form(request)
@@ -250,11 +286,24 @@ async def phone_status(request: Request, lead: str = Query(default="", max_lengt
             except asyncio.TimeoutError:
                 pass
         res = await phone_agent.finish(http, sid, duration=float(form.get("CallDuration") or 0) or None)
-        if not res.get("finished") and lead_id:   # answered but never reached our start endpoint
-            await Supabase(http).update("leads", {"id": f"eq.{lead_id}"}, {"status": "no_answer"})
+        if not res.get("finished") and lead_id:   # picked up but never reached Divya (e.g. hung up at the trial message)
+            from . import callbacks
+            res["reattempt"] = await callbacks.schedule_reattempt(Supabase(http), lead_id)
         return res
+    if status in ("no-answer", "busy", "failed", "canceled") and lead_id and cb:
+        # A scheduled call-back went unanswered: retry once after an hour (within the call-back limit).
+        from . import callbacks
+        sb = Supabase(http)
+        lead_row = (await sb.select("leads", {"select": "callback_tries,status", "id": f"eq.{lead_id}"}) or [{}])[0]
+        if lead_row.get("status") != "do_not_call" and (lead_row.get("callback_tries") or 0) < callbacks.MAX_CALLBACKS:
+            at = callbacks.retry_after_no_answer()
+            await sb.update("leads", {"id": f"eq.{lead_id}"}, {"status": "callback", "next_call_at": at.isoformat(),
+                                                               "callback_note": "call-back not answered, trying once more"})
+            return {"status": status, "retry_at": at.isoformat()}
     if status in ("no-answer", "busy", "failed", "canceled") and lead_id:
-        await Supabase(http).update("leads", {"id": f"eq.{lead_id}"}, {"status": "no_answer"})
+        # Rang but nobody picked up: re-attempt automatically (2 h, then next day 11 am, then stop).
+        from . import callbacks
+        return {"status": status, "reattempt": await callbacks.schedule_reattempt(Supabase(http), lead_id)}
     return {"status": status}
 
 

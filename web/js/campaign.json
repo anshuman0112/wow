@@ -367,7 +367,7 @@
     {
       "name": "Busy right now",
       "mood": "calm",
-      "reply": "Completely understood. When would be a better time for a two-minute call?"
+      "reply": "No problem! When would be a good time for me to call you back? (Divya repeats the time back, e.g. \"I'll call you back tomorrow at 5 pm\", ends politely, and the system calls them back automatically then.)"
     },
     {
       "name": "Irritated user",

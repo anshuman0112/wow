@@ -27,7 +27,7 @@ def twiml_connect_to_aanya(lead_id: str = "") -> str:
             f'<Response><Dial answerOnBridge="true" timeLimit="300"><Sip>{escape(sip)}</Sip></Dial></Response>')
 
 
-async def call_lead(http: httpx.AsyncClient, lead_id: str) -> dict:
+async def call_lead(http: httpx.AsyncClient, lead_id: str, callback: bool = False) -> dict:
     s = settings()
     if s.phone_line == "none":
         raise CallError("No phone line configured: add Twilio keys (free bridge) or a Vapi phone number.")
@@ -60,7 +60,7 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str) -> dict:
                 "metadata": {"lead_id": lead_id, "campaign_id": s.campaign_id}})
             await dialled()
             return {"ok": True, "via": "vapi-number", "id": res.get("id")}
-        q = f"?lead={quote(lead_id)}"
+        q = f"?lead={quote(lead_id)}" + ("&cb=1" if callback else "")   # cb=1: a scheduled call-back
         base = s.public_base_url
         if s.phone_line == "twilio-sip":      # paid Twilio: bridge into Vapi's SIP line
             url = f"{base}/api/twiml{q}"

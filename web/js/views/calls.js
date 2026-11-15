@@ -141,6 +141,7 @@ function openDrawer(c) {
             <span class="spacer"></span>
             Expert callback: <b style="color:var(--ink)">${esc(c.callback_time || 'Not booked')}</b>
           </div>
+          ${c.call_back_at ? `<div class="banner" style="margin:12px 0 0">${icon('phone')}<span>Lead was busy: Divya will call back automatically on <b>${esc(fmtDate(c.call_back_at))}</b>.</span></div>` : ''}
         </section>
 
         <section class="card card-pad">

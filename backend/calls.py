@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from .clients import Supabase, Vapi, telegram_alert
+from .clients import Groq, Supabase, Vapi, telegram_alert
 from .settings import settings
 
 UUID = re.compile(r"^[0-9a-f-]{36}$", re.I)
@@ -123,7 +123,7 @@ async def process_end_of_call(http: httpx.AsyncClient, msg: dict) -> dict:
         except Exception as e:  # noqa: BLE001 — the call row is already saved
             result["recording"] = f"failed: {type(e).__name__}: {e}"[:300]
 
-    status = await apply_lead_update(sb, row)
+    status = await apply_lead_update(sb, row, Groq(http))
     if status:
         result["lead_status"] = status
     if row.get("interest") == "hot":
@@ -131,7 +131,7 @@ async def process_end_of_call(http: httpx.AsyncClient, msg: dict) -> dict:
     return result
 
 
-async def apply_lead_update(sb: Supabase, row: dict) -> str | None:
+async def apply_lead_update(sb: Supabase, row: dict, groq: "Groq | None" = None) -> str | None:
     """After any call (browser or phone): set the lead's status, interest and callback time."""
     if not (row.get("lead_id") or row.get("phone")):
         return None
@@ -144,5 +144,17 @@ async def apply_lead_update(sb: Supabase, row: dict) -> str | None:
             if row.get(k):
                 patch[k] = row[k]
     filters = {"id": f"eq.{row['lead_id']}"} if row.get("lead_id") else {"phone": f"eq.{row['phone']}"}
+    if not no_answer and groq is not None and patch["status"] != "do_not_call":
+        # Busy lead who asked to be called back → schedule the automatic call-back.
+        from . import callbacks
+        lead = (await sb.select("leads", {"select": "callback_tries", **filters}) or [{}])[0]
+        ended = datetime.fromisoformat(str(patch["last_called_at"]).replace("Z", "+00:00"))
+        at, note = await callbacks.plan(groq, row.get("analysis") or {}, ended, lead.get("callback_tries") or 0)
+        if at:
+            patch |= {"status": "callback", "next_call_at": at.isoformat(), "callback_note": note}
+            if row.get("vapi_call_id"):
+                await sb.update("calls", {"vapi_call_id": f"eq.{row['vapi_call_id']}"}, {"call_back_at": at.isoformat()})
+        else:
+            patch |= {"next_call_at": None}
     await sb.update("leads", filters, patch)
     return patch["status"]

@@ -50,7 +50,7 @@ export default async function leadsView(el) {
       <section class="card">
         <div class="toolbar">
           <div class="seg" role="group" aria-label="Filter leads">
-            ${[['all', 'All'], ['new', 'New'], ['re_engaged', 'Interested again'], ['hot', 'Hot'], ['warm', 'Warm'], ['cold', 'Cold'], ['do_not_call', 'Do not call']]
+            ${[['all', 'All'], ['new', 'New'], ['re_engaged', 'Interested again'], ['callback', 'Call-back'], ['no_answer', 'No answer'], ['hot', 'Hot'], ['warm', 'Warm'], ['cold', 'Cold'], ['do_not_call', 'Do not call']]
               .map(([k, v]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${v}</button>`).join('')}
           </div>
           <span class="spacer"></span>
@@ -66,7 +66,7 @@ export default async function leadsView(el) {
                   <td class="mono">${esc(l.phone)}</td>
                   <td>${esc(l.location || '—')}</td>
                   <td>${esc(l.budget || '—')}</td>
-                  <td>${statusBadge(l.status)}${l.status === 're_engaged' && l.re_engaged_at ? `<div class="cell-sub">came back ${fmtDate(l.re_engaged_at)}</div>` : ''}</td>
+                  <td>${statusBadge(l.status)}${l.status === 're_engaged' && l.re_engaged_at ? `<div class="cell-sub">came back ${fmtDate(l.re_engaged_at)}</div>` : ''}${l.next_call_at ? `<div class="cell-sub">auto-call ${fmtDate(l.next_call_at)}</div>` : l.status === 'no_answer' && l.attempts >= 3 ? '<div class="cell-sub">unreachable, stopped</div>' : ''}</td>
                   <td>${interestBadge(l.interest)}</td>
                   <td>${esc(l.callback_time || '—')}</td>
                   <td class="cell-sub">${esc(l.source || '—')}<br>${fmtDate(l.created_at)}</td>

@@ -4,6 +4,7 @@ import overview from './views/overview.js';
 import talk from './views/talk.js';
 import voicesView from './views/voices.js';
 import leads from './views/leads.js';
+import queueView from './views/queue.js';
 import calls from './views/calls.js';
 import campaignView from './views/campaign.js';
 import brief from './views/brief.js';
@@ -14,6 +15,7 @@ const routes = [
   { path: 'talk', label: 'Talk to Divya', icon: 'mic', view: talk },
   { path: 'voices', label: 'Voices', icon: 'play', view: voicesView },
   { path: 'leads', label: 'Leads', icon: 'users', view: leads },
+  { path: 'queue', label: 'Call queue', icon: 'phone', view: queueView },
   { path: 'calls', label: 'Calls', icon: 'history', view: calls },
   { section: 'Setup' },
   { path: 'campaign', label: 'Campaign & knowledge', icon: 'book', view: campaignView },

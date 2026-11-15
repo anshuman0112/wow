@@ -56,7 +56,7 @@ RULE 4 — UNCLEAR SPEECH: phone transcription can be wrong (e.g. "7260 lacs" pr
 
 FLOW (skip answered steps; only move on when the lead has no open question): 1) Intent: weekend home or investment? 2) Geography: comfortable with Nandi Hills/Devanahalli near the airport corridor? 3) Budget: plots start at ninety-two point four lakh incl. taxes, does that work? 4) Timeline: phased delivery, possession December 2029, comfortable? 5) PITCH (required, never skip): in the same turn as step 6, first paint the picture in one sentence: "a private valley with 74% open green space, eco-parks, Nandi Hills views and a 20,000 sq ft clubhouse, among a like-minded community". 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
 
-OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; busy -> ask a better time and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
+OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; busy -> ask WHEN to call back ("No problem! When would be a good time for me to call you back?"); when they give a time, repeat it back ("Perfect, I'll call you back tomorrow at 5 pm. Thank you!") and end; never suggest a time yourself; if they won't give one, say you'll try again later and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
 
 LANGUAGE: start in English; if the lead speaks Hindi/Hinglish, reply in simple Hinglish (English letters only).
 
@@ -86,8 +86,11 @@ def _first_name(name: str | None) -> str:
     return (name or "").strip().split(" ")[0] if name else ""
 
 
-def greeting(name: str | None) -> str:
+def greeting(name: str | None, callback: bool = False) -> str:
     who = _first_name(name) or "there"
+    if callback:   # the lead asked us to call back at this time
+        return (f"Hello {who}! This is Divya from Divyasree Developers. You had asked me to call you back around now, "
+                "about Whispers of the Wind, our villa plot community near Nandi Hills. Is this a good time?")
     return (f"Hello {who}! This is Divya, a consultant from Divyasree Developers, calling about Whispers of the Wind, "
             "our villa plot community near Nandi Hills in North Bengaluru. Is this a good time for two minutes?")
 
@@ -137,14 +140,15 @@ async def save_session(http: httpx.AsyncClient, sb: Supabase, call_sid: str, row
                         {"messages": row.get("messages"), "raw": row.get("raw")})
 
 
-async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number: str | None) -> str:
+async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number: str | None,
+                callback: bool = False) -> str:
     """First request when the lead answers: create the session row and greet them."""
     sb = Supabase(http)
     lead = (await cache.get_lead(http, lead_id)) or {}   # stashed by "Call now" → no database trip
     if lead_id and not lead:
         rows = await sb.select("leads", {"select": "id,name,phone,location", "id": f"eq.{lead_id}"})
         lead = rows[0] if rows else {}
-    hello = greeting(lead.get("name"))
+    hello = greeting(lead.get("name"), callback)
     from . import voices
     voice = lead.get("voice") or await voices.selected(http)   # chosen in the dashboard
     row = {
@@ -152,7 +156,7 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number:
         "phone": lead.get("phone") or to_number, "call_type": "twilioPhoneCall",
         "started_at": datetime.now(timezone.utc).isoformat(),
         "messages": [{"role": "assistant", "text": hello}],
-        "raw": {"engine": "twilio-gather", "voice": voice, "silences": 0, "lang": "en", "location": lead.get("location"),
+        "raw": {"engine": "twilio-gather", "voice": voice, "callback": callback, "silences": 0, "lang": "en", "location": lead.get("location"),
                 "session_store": "redis" if cache.fast_enough() else "supabase"},
     }
     # Fast path: the call lives in Redis and is written to Supabase after hang-up (status callback).
@@ -352,7 +356,7 @@ async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "cu
     }
     update = {k: v for k, v in update.items() if v is not None}
     await sb.update("calls", {"vapi_call_id": f"eq.{_sid_key(call_sid)}"}, update)
-    status = await apply_lead_update(sb, {**update, "lead_id": row.get("lead_id")})
+    status = await apply_lead_update(sb, {**update, "lead_id": row.get("lead_id"), "vapi_call_id": _sid_key(call_sid)}, groq)
     if update.get("interest") == "hot":
         await telegram_alert(http, f"🔥 Hot lead (phone): {row.get('name') or 'Caller'}\n{update['summary']}")
     return {"finished": True, "interest": update.get("interest"), "lead_status": status}
