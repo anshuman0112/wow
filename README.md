@@ -99,10 +99,25 @@ flowchart LR
 | **Talk to Divya** | Talk to her in the browser, as a generic lead or as a lead from your list (`#/talk/<leadId>`). |
 | **Voices** | Two sections: **Phone calls** (press ▶ to hear 7 Twilio voices and pick one) and **Browser calls** (pick Riya, Sia or Anika for Talk to Divya). |
 | **Leads** | Import any lead file (columns are detected automatically), add a lead by hand, verify a number, or press **Call phone**. Duplicates are matched by phone number: nobody is added or called twice, and a lead who was not interested but enquires again is marked **Interested again**. |
+| **Settings** | Change Divya's questions (English + Hindi), the scoring points and Hot/Warm pass marks, calling hours and the re-attempt cadence. Saving needs the admin PIN and updates phone, browser and inbound calls. |
 | **Call queue** | Everyone still to call, filtered by **New**, **Interested again**, **Call-back requested** and **Re-attempt**. Call-backs and re-attempts are dialled automatically; new leads when you press **Call now**. |
 | **Calls** | See each call's transcript, summary, score, checkpoints and callback time. |
 | **Campaign & knowledge** | Facts, flow, edge cases and pronunciation: everything Divya knows. |
 | **Assignment checklist** | Every requirement of the brief and where it is covered. |
+
+### Speed to lead: every source, called within seconds
+- **Sources (free):** the ready **Enquire page** (`/enquire.html`), **Facebook + Instagram lead ads** (Meta webhook),
+  **Google Ads lead forms**, **Google Forms** / any tool (`/api/leads/inbound`). Setup: [`docs/LEAD_SOURCES.md`](docs/LEAD_SOURCES.md).
+- Each lead is saved without duplicates, tagged with its source, and called **within seconds** (or at 9 am if it arrives at night).
+  The Integrations page shows leads per source and the average **time to first call**, with a *Send test lead* button per source.
+- **Inbound line (24/7):** a free Vapi number, **+1 650 252 2112**, answered by *Divya · Inbound*; callers become leads.
+
+### Lead profile and hand-off
+- After every call: **score 0–100** with the reason and the lead's own words for each point, **objections**, **decision maker**
+  and a **recommended next action**. Hot requires the budget to fit.
+- **Live score** while you talk on *Talk to Divya*.
+- Hand-off: automatic **CRM webhook**, **Share on WhatsApp** (free wa.me link) and **Download leads (CSV)**.
+  Real phone numbers are only released with the admin PIN.
 
 ### Automatic call-backs and re-attempts
 - **Busy lead:** Divya asks *"When would be a good time for me to call you back?"*, repeats the time back and ends politely.

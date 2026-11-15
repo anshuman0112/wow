@@ -59,7 +59,7 @@ RULE 4 — UNCLEAR SPEECH: phone transcription can be wrong (e.g. "7260 lacs" pr
 
 FLOW (skip answered steps; only move on when the lead has no open question; use these questions, in your own natural words if needed): 1) Intent: "{q['intent']['en']}" 2) Geography: "{q['geography']['en']}" 3) Budget: "{q['budget']['en']}" 4) Timeline: "{q['timeline']['en']}" 4b) Decision (one soft question, skip if already known): "{q['decision']['en']}" 5) PITCH (required, never skip, in the same turn as step 6): "{q['pitch']['en']}" 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
 
-OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; busy -> ask WHEN to call back ("No problem! When would be a good time for me to call you back?"); when they give a time, repeat it back ("Perfect, I'll call you back tomorrow at 5 pm. Thank you!") and end; never suggest a time yourself; if they won't give one, say you'll try again later and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
+OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; wants ready-to-move or in the city -> 'Understood. This is a plotted community with possession in December 2029, so it suits buyers who can plan ahead', offer the Property Expert, never refuse; busy -> (if they sound irritated, first apologise briefly) ask WHEN to call back ("No problem! When would be a good time for me to call you back?"); when they give a time, repeat it back ("Perfect, I'll call you back tomorrow at 5 pm. Thank you!") and end; never suggest a time yourself; if they won't give one, say you'll try again later and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
 
 LANGUAGE: start in English; if the lead speaks Hindi/Hinglish, reply in simple Hinglish (English letters only).
 
@@ -287,6 +287,11 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     lang = faq.lang_of(speech, lang)
     intents = faq.detect(speech)
     t0 = time.perf_counter()
+    slot = faq.slot_confirmation(messages, lang)
+    if slot:   # the lead chose the Property Expert time: confirm it back exactly and close politely
+        print(f"[phone] slot confirmed", flush=True)
+        return {"reply": slot, "end": True, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "rule:slot-confirm", "prompt_tokens": 0, "completion_tokens": 0}}
     objection = faq.budget_objection(messages, lang) or faq.location_objection(messages, lang)
     if objection:   # objections first: "it's too far from my office" must be countered, not answered as a FAQ
         low = objection.lower()
@@ -310,9 +315,12 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     else:
         out = await think(groq, messages, name, location, lang)
         if out.get("reply"):
-            out["reply"] = faq.guard(out["reply"], messages, out.get("lang") or lang)
+            use_lang = "hi" if lang == "hi" else (out.get("lang") or lang)   # the lead's detected Hinglish wins
+            out["lang"] = use_lang
+            out["reply"] = faq.keep_language(faq.guard(out["reply"], messages, use_lang), use_lang)
         else:   # every model rate-limited/failed: answer from the script instead of "say that once more"
-            out.update({"reply": faq.fallback_reply(messages, lang), "end": False, "lang": lang,
+            fb = faq.fallback_reply(messages, lang)
+            out.update({"reply": fb, "end": bool(re.search(r"have a lovely day|aapke time ke liye dhanyavaad", fb.lower())), "lang": lang,
                         "_usage": {"model": "rule:fallback", "prompt_tokens": 0, "completion_tokens": 0}})
     reply = speakable(out.get("reply") or "")
     if out.get("end") and reply.rstrip().endswith("?"):

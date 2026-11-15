@@ -32,6 +32,13 @@ const sections = [
     ['Additional project details if asked (searched online)', 'Fact sheet: 38 acres, ~207 plots, RERA, ~Rs 7,700/sq ft, schools, hospitals, distances (Campaign page, items tagged "Web")', 'done'],
   ]},
   { title: 'Extras beyond the brief', items: [
+    ['Lead profile: score 0-100 with reasons, objections, decision maker, next action', 'Each call: profile card with quotes; same answers always give the same score', 'done'],
+    ['Lead sources: website form, Facebook, Instagram, Google Ads, Google Forms', 'Integrations page; every new lead is called automatically within seconds (calling hours apply)', 'done'],
+    ['Inbound calls 24/7', 'Free line +1 650 252 2112 answered by Divya · Inbound; callers saved as leads', 'done'],
+    ['Hand-off to the sales team', 'CRM webhook after every call, Share on WhatsApp, CSV download', 'done'],
+    ['Settings without code', 'Questions (EN + HI), scoring and pass marks, calling hours, re-attempt cadence', 'done'],
+    ['Live score during browser calls', 'Talk to Divya page, same rules as the final profile', 'done'],
+    ['Evaluation suite', '7 scenarios, 52/54 checks (96%) on the latest run: docs/eval_report.md', 'done'],
     ['Automatic call-backs for busy leads', 'Divya asks when to call back and repeats the time; the system calls back then (9 am-9 pm IST, max 2 call-backs, scheduler every ~5 min)', 'done'],
     ['Automatic re-attempts when nobody picks up', 'Retry after 2 h, then next day 11 am, then stop as unreachable', 'done'],
     ['Call queue: everyone still to call', 'Call queue page: New / Interested again / Call-back requested / Re-attempt, with counts', 'done'],

@@ -168,20 +168,16 @@ def budget_objection(messages: list[dict], lang: str) -> str | None:
                ("Bilkul samajh gayi, openly batane ke liye shukriya. Main aapka budget note kar leti hoon, koi suitable "
                 "option aaya toh hamari team aapse contact karegi. Aapka din shubh ho!")
     if "staged" in said:                                                       # step 2: the gap is small
-        return (f"I hear you. Honestly, the gap is only {gap_en}, and with staged payments plus a plot loan, many of our "
-                "buyers bridge it comfortably. There's no obligation at all. Would a ten-minute call with our Property "
-                "Expert to see the actual numbers be worth it?") if lang == "en" else \
-               (f"Main samajh rahi hoon. Sach kahun toh gap sirf {gap_hi} ka hai, aur staged payments aur plot loan ke saath "
-                "bahut se buyers ise aaraam se manage kar lete hain. Koi obligation nahi hai. Kya hamare Property Expert ke "
-                "saath das minute ki call mein actual numbers dekhna theek rahega?")
-    return (f"Understood, and many of our buyers started with a budget close to {amount}. Payments here are staged with "
-            "construction until December 2029, so you don't pay it all upfront, and our Property Expert can arrange "
-            "plot-loan options to keep the monthly outgo light. You'd also be entering early in North Bengaluru's airport "
-            "and STRR growth corridor. Shall I have our expert show you a payment plan around your budget?") if lang == "en" else \
-           (f"Samajh gayi, hamare kaafi buyers ne bhi {amount} ke aas-paas ke budget se shuru kiya tha. Yahan payments "
-            "December 2029 tak construction ke saath staged hain, sab upfront nahi dena hota, aur hamare Property Expert "
-            "plot-loan options arrange kar sakte hain taaki monthly outgo halka rahe. Aur aap North Bengaluru ke airport aur "
-            "STRR growth corridor mein early enter karenge. Kya hamare expert aapke budget ke hisaab se payment plan dikhayen?")
+        return (f"I hear you. Honestly, the gap is only {gap_en}, and with staged payments plus a plot loan many buyers "
+                "bridge it comfortably. No obligation: would a ten-minute call with our Property Expert to see the numbers help?") if lang == "en" else \
+               (f"Main samajh rahi hoon. Gap sirf {gap_hi} ka hai, aur staged payments aur plot loan se bahut se buyers ise "
+                "aaraam se manage karte hain. Koi obligation nahi: kya Property Expert ke saath das minute ki call theek rahegi?")
+    return (f"Understood, many of our buyers started near {amount}. Entry plots begin at ninety-two point four lakh, but "
+            "payments are staged with construction till 2029 and our expert can arrange plot loans to keep the monthly outgo light, "
+            "in a fast-growing airport corridor. Shall I have our expert show you a payment plan around your budget?") if lang == "en" else \
+           (f"Samajh gayi, kaafi buyers ne {amount} ke aas-paas se shuru kiya tha. Entry plots ninety-two point four lakh se shuru "
+            "hote hain, par payments 2029 tak construction ke saath staged hain aur expert plot loan arrange kar sakte hain, "
+            "taaki monthly outgo halka rahe. Kya expert aapke budget ke hisaab se payment plan dikhayen?")
 
 
 LOCATION_PUSHBACK = re.compile(
@@ -210,6 +206,39 @@ def location_objection(messages: list[dict], lang: str) -> str | None:
             "weekend home ya investment ke roop mein kaam karega?")
 
 
+SLOT = re.compile(
+    r"\b((today|tomorrow|kal|parso|monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+    r"(\s+(morning|evening|afternoon|night|subah|shaam|dopahar|raat))?"
+    r"(\s+(at\s+)?\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.|baje)?)?"
+    r"(\s+(saat|aath|nau|das|gyarah|barah|ek|do|teen|chaar|paanch|chhe)\s+baje)?)", re.I)
+
+
+def slot_confirmation(messages: list[dict], lang: str) -> str | None:
+    """The lead gave a day/time for the Property Expert call → confirm exactly what they said and close politely.
+    Not for "call me back later" requests (that's the busy flow)."""
+    last = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
+    low = last.lower()
+    if re.search(r"call (me )?back|busy|meeting|abhi nahi|not now|later", low):
+        return None
+    m = SLOT.search(last)
+    if not m:
+        return None
+    prev = next((x["text"].lower() for x in reversed(messages[:-1]) if x["role"] == "assistant"), "")
+    asked_slot = re.search(r"(day|time|kab|kaunsa din|when)", prev) and "expert" in prev
+    has_time = bool(m.group(3) or m.group(5) or m.group(9))   # a day AND a time = an appointment
+    if not ("expert" in low or asked_slot or has_time):
+        return None
+    slot = re.sub(r"\s+", " ", m.group(1)).strip()
+    pitch = "pitch" in covered(messages)
+    if lang == "en":
+        extra = "" if pitch else ("They'll walk you through our private valley with seventy-four percent open green space, "
+                                  "eco-parks and the twenty thousand square foot clubhouse. ")
+        return f"Perfect, I have noted {slot} for your call with our Property Expert. {extra}Thank you, and have a lovely day!"
+    extra = "" if pitch else ("Woh aapko seventy-four percent open green space, eco-parks aur twenty thousand square foot "
+                              "clubhouse wali hamari private valley ke baare mein batayenge. ")
+    return f"Perfect, maine {slot} Property Expert ki call ke liye note kar liya hai. {extra}Dhanyavaad, aapka din shubh ho!"
+
+
 def fallback_reply(messages: list[dict], lang: str) -> str:
     """Used only if every LLM attempt fails (e.g. free-tier rate limit) — never 'say that once more'."""
     last = (messages[-1]["text"] if messages and messages[-1]["role"] == "user" else "").lower()
@@ -234,9 +263,28 @@ DAYS = r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow)\b
 TIMES = r"\b\d{1,2}(:\d{2})?\s?(am|pm|a\.m\.|p\.m\.|baje)\b"
 
 
+REFUSAL = re.compile(r"\b(i('| a)?m sorry, (but )?i can('|no)t help|i can('|no)t (help|assist) with)", re.I)
+
+
+def keep_language(reply: str, lang: str) -> str:
+    """A Hinglish speaker must not get the English script question: swap it for the Hindi version."""
+    if lang != "hi" or re.search(HINDI, reply.lower()):
+        return reply
+    for q in _questions().values():
+        if q.get("en") and q["en"] in reply and q.get("hi"):
+            return reply.replace(q["en"], q["hi"])
+    return reply
+
+
 def guard(reply: str, messages: list[dict], lang: str) -> str:
     """Fix the two failure modes the evaluation found: invented slots and a skipped pitch."""
     lead = " ".join(m["text"].lower() for m in messages if m["role"] == "user")
+    if REFUSAL.search(reply):   # a sales consultant never says "I can't help with that"
+        reply = ("Understood. This is a plotted community with possession in December 2029, so it suits buyers who can plan "
+                 "ahead; our Property Expert can also guide you on what fits you best. Would a short call with them help?"
+                 if lang == "en" else
+                 "Samajh gayi. Yeh plotted community hai, possession December 2029 tak, toh yeh aage ki planning wale buyers ke "
+                 "liye hai; hamare Property Expert aapko sahi option batayenge. Kya unke saath ek short call theek rahegi?")
     r = reply
     lead_gave_slot = bool(re.search(DAYS, lead) or re.search(r"next week|\bkal\b|parso", lead))
     lead_gave_time = re.search(r"\d|baje|am\b|pm\b|morning|evening|afternoon|subah|shaam|dopahar|raat", lead)

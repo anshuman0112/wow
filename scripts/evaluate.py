@@ -23,7 +23,7 @@ for _s in (sys.stdout, sys.stderr):
 import httpx  # noqa: E402
 
 from backend.clients import Groq  # noqa: E402
-from backend.phone_agent import SYSTEM_PHONE, greeting, respond  # noqa: E402
+from backend.phone_agent import greeting, respond, system_phone  # noqa: E402
 
 # ── checks ────────────────────────────────────────────────────────────────────
 DAYS = r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|somvar|ravivar)\b"
@@ -190,7 +190,7 @@ def report(results: list[dict]) -> str:
     P, T = sum(r["passed"] for r in results), sum(r["total"] for r in results)
     lines = [
         "# Divya phone-brain evaluation", "",
-        f"_System prompt ≈ {len(SYSTEM_PHONE) // 4} tokens · {len(allturns)} turns · {time.strftime('%Y-%m-%d %H:%M')}_", "",
+        f"_System prompt ≈ {len(system_phone()) // 4} tokens · {len(allturns)} turns · {time.strftime('%Y-%m-%d %H:%M')}_", "",
         "| Metric | Value |", "|---|---|",
         f"| **Checks passed** | **{P}/{T} ({100 * P // max(T, 1)}%)** |",
         f"| LLM latency per turn | avg {sum(lat) / max(len(lat), 1):.2f}s · max {max(lat or [0]):.2f}s |",
