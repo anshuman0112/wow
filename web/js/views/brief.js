@@ -32,6 +32,9 @@ const sections = [
     ['Additional project details if asked (searched online)', 'Fact sheet: 38 acres, ~207 plots, RERA, ~Rs 7,700/sq ft, schools, hospitals, distances (Campaign page, items tagged "Web")', 'done'],
   ]},
   { title: 'Extras beyond the brief', items: [
+    ['Automatic call-backs for busy leads', 'Divya asks when to call back and repeats the time; the system calls back then (9 am-9 pm IST, max 2 call-backs, scheduler every ~5 min)', 'done'],
+    ['Automatic re-attempts when nobody picks up', 'Retry after 2 h, then next day 11 am, then stop as unreachable', 'done'],
+    ['Call queue: everyone still to call', 'Call queue page: New / Interested again / Call-back requested / Re-attempt, with counts', 'done'],
     ['Real phone calls to leads', 'Leads → Call phone (free Twilio trial); reviewers verify their number on the Leads page first', 'done'],
     ['Phone voice library', 'Voices page: 7 phone voices with ▶ preview + 3 browser voices, one clear place to choose both', 'done'],
     ['Every call, transcript and summary stored', 'Python API (FastAPI) saves calls to Supabase with AI summary, interest and checkpoints', 'done'],

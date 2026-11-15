@@ -99,9 +99,19 @@ flowchart LR
 | **Talk to Divya** | Talk to her in the browser, as a generic lead or as a lead from your list (`#/talk/<leadId>`). |
 | **Voices** | Two sections: **Phone calls** (press ▶ to hear 7 Twilio voices and pick one) and **Browser calls** (pick Riya, Sia or Anika for Talk to Divya). |
 | **Leads** | Import any lead file (columns are detected automatically), add a lead by hand, verify a number, or press **Call phone**. Duplicates are matched by phone number: nobody is added or called twice, and a lead who was not interested but enquires again is marked **Interested again**. |
+| **Call queue** | Everyone still to call, filtered by **New**, **Interested again**, **Call-back requested** and **Re-attempt**. Call-backs and re-attempts are dialled automatically; new leads when you press **Call now**. |
 | **Calls** | See each call's transcript, summary, score, checkpoints and callback time. |
 | **Campaign & knowledge** | Facts, flow, edge cases and pronunciation: everything Divya knows. |
 | **Assignment checklist** | Every requirement of the brief and where it is covered. |
+
+### Automatic call-backs and re-attempts
+- **Busy lead:** Divya asks *"When would be a good time for me to call you back?"*, repeats the time back and ends politely.
+  After the call, the AI turns the answer ("tomorrow 5 pm", "kal shaam 6 baje", "after 2 hours") into an exact time,
+  and the system calls back then with *"You had asked me to call you back around now"*.
+- **No answer:** retried after 2 hours, then next day at 11 am, then stopped (marked unreachable).
+- **Polite limits:** only 9 am – 9 pm IST, at most 2 call-backs per lead, and "don't call me" always wins.
+- **Scheduler:** a free GitHub Actions job (`.github/workflows/callbacks.yml`) calls `/api/dialer/tick` about every
+  5 minutes, so a call-back lands within roughly 5–15 minutes of the requested time.
 
 ### About the free Twilio trial
 - It can only call **verified** numbers. Anyone can verify their own number on the **Leads** page: Twilio rings them, and they type the 6-digit code shown on screen.
