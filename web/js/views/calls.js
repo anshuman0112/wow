@@ -19,6 +19,8 @@ function presetRange(p) {
 
 const fmtDay = d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
+const langName = l => ({ en: 'English', hi: 'Hinglish', 'en-IN': 'English', 'hi-IN': 'Hinglish' })[l] || l || '—';
+
 export default async function callsView(el, [openId]) {
   const calls = await getCalls();
 
@@ -73,10 +75,10 @@ export default async function callsView(el, [openId]) {
             <tbody>
               ${shown.map(c => `
                 <tr class="clickable" data-id="${esc(c.id)}" tabindex="0">
-                  <td><div class="cell-title">${esc(c.name)}</div><div class="cell-sub">${esc(c.scenario || c.ended_reason || '')}</div></td>
+                  <td><div class="cell-title">${esc(c.name || 'Unknown caller')}</div><div class="cell-sub">${esc(c.scenario || c.ended_reason || '')}</div></td>
                   <td>${fmtDate(c.started_at)}</td>
                   <td class="mono">${fmtDur(c.duration_sec)}</td>
-                  <td>${esc(c.language || '—')}</td>
+                  <td>${esc(langName(c.language))}</td>
                   <td>${moodBadge(c.sentiment_end)}</td>
                   <td class="mono">${c.score ?? '—'}</td>
                   <td>${interestBadge(c.interest)}</td>
@@ -168,8 +170,8 @@ function openDrawer(c) {
     <aside class="drawer" role="dialog" aria-modal="true" aria-label="Call details">
       <div class="drawer-head">
         <div style="flex:1;min-width:0">
-          <h2>${esc(c.name)}</h2>
-          <div class="cell-sub">${fmtDate(c.started_at)} · ${fmtDur(c.duration_sec)} · ${esc(c.language || '')}${c.cost_usd ? ` · $${Number(c.cost_usd).toFixed(2)}` : ''}</div>
+          <h2>${esc(c.name || 'Unknown caller')}</h2>
+          <div class="cell-sub">${fmtDate(c.started_at)} · ${fmtDur(c.duration_sec)} · ${esc(langName(c.language))}${c.cost_usd ? ` · $${Number(c.cost_usd).toFixed(2)}` : ''}</div>
         </div>
         ${interestBadge(c.interest)}
         <button class="btn btn-ghost" id="close" aria-label="Close">${icon('x')}</button>
@@ -208,7 +210,7 @@ function openDrawer(c) {
           <div class="card-head"><h3>Full conversation</h3><span class="muted small">${c.messages?.length || 0} turns</span></div>
           <div class="transcript">
             ${(c.messages || []).map(m => `
-              <div class="msg ${m.role}"><span class="who">${m.role === 'assistant' ? 'Divya' : esc(c.name)}</span>${esc(m.text)}</div>`).join('')}
+              <div class="msg ${m.role}"><span class="who">${m.role === 'assistant' ? 'Divya' : esc(c.name || 'Lead')}</span>${esc(m.text)}</div>`).join('')}
           </div>
         </section>
       </div>

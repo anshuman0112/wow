@@ -735,7 +735,7 @@ def rule_analysis(messages: list[dict]) -> dict:
     return {"summary": summary, "intent": intent, "geography_fit": geo, "budget_fit": budget, "timeline_fit": timeline,
             "decision_maker": decider, "callback_time": slot or None, "do_not_call": objects(r"don'?t call"),
             "sentiment_start": "neutral", "sentiment_end": "negative" if not_interested else ("positive" if slot else "neutral"),
-            "language": "hi" if faq.lang_of(lead, "en") == "hi" else "en",
+            "language": "Hinglish" if faq.lang_of(lead, "en") == "hi" else "English",
             "next_action": f"Property Expert call {slot}" if slot else ("Close - not interested" if not_interested else "Follow up"),
             "objections": [], "source": "rules (AI analysis was unavailable)"}
 

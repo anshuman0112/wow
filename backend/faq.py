@@ -132,13 +132,20 @@ ASKED = {
 
 def _is_question(text: str) -> bool:
     t = text.strip().lower()
-    return t.endswith("?") or bool(re.match(r"(how|what|when|where|which|why|is |are |can |could |do |does |tell me|please tell)", t))
+    return t.endswith("?") or bool(re.match(r"(how|what|when|where|which|why|is |are |can |could |do |does |tell me|please tell)", t))         or bool(detect(text))   # a topic request ("Colleges and hospitals.") asks for information, it answers nothing
+
+
+def answer_part(text: str) -> str:
+    """The parts of a lead's turn that ANSWER something: "Yes. It will work for me, but can you tell me the
+    amenities" -> "Yes. It will work for me". Pure questions or topic requests -> ""."""
+    parts = re.split(r"(?<=[.!?])\s+|,?\s+\b(?:but|and also|also)\b\s+", text.strip(), flags=re.I)
+    return " ".join(x for x in parts if x and x.strip() and not _is_question(x)).strip()
 
 
 def covered(messages: list[dict]) -> set[str]:
     """What this call has already covered, read from the conversation itself."""
     # Only the lead's ANSWERS count: "How far is Nandi Hills?" is a question, not "location is fine".
-    lead = " ".join(m["text"].lower() for m in messages if m["role"] == "user" and not _is_question(m["text"]))
+    lead = " ".join(answer_part(m["text"]).lower() for m in messages if m["role"] == "user")
     aanya = " ".join(m["text"].lower() for m in messages if m["role"] == "assistant")
     c = set()
     qs = _questions()
@@ -149,7 +156,7 @@ def covered(messages: list[dict]) -> set[str]:
         for i, m in enumerate(messages[:-1]):
             said = m["text"].lower().replace("-", " ")
             if m["role"] == "assistant" and (re.search(pat, said) or any(re.search(h, said) for h in heads)) and \
-                    any(x["role"] == "user" and not _is_question(x["text"]) for x in messages[i + 1:]):
+                    any(x["role"] == "user" and answer_part(x["text"]) for x in messages[i + 1:]):
                 c.add(step)
                 break
     if re.search(r"invest|weekend|self.?use|family|own use|khud|apne liye|rehne", lead):
