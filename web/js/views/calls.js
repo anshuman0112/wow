@@ -69,7 +69,9 @@ function openDrawer(c) {
           <h3>Recording</h3>
           ${c.recording_url
             ? `<audio controls preload="none" src="${esc(c.recording_url)}" style="width:100%;margin-top:10px"></audio>`
-            : `<p class="muted small" style="margin-top:6px">Sample call — no audio. Real calls show a player here (stored in Supabase Storage).</p>`}
+            : c.call_type === 'twilioPhoneCall'
+              ? `<p class="muted small" style="margin-top:6px">Phone calls on the free Twilio trial can't be recorded (Twilio blocks recording on trial accounts), so the full transcript is below. Browser calls from <b>Talk to Aanya</b> are recorded and play here.</p>`
+              : `<p class="muted small" style="margin-top:6px">${mode() === 'demo' ? 'Sample call — no audio.' : 'No recording was saved for this call.'} Recorded calls play here (stored in Supabase Storage).</p>`}
         </section>
 
         <section class="card card-pad">
