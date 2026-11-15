@@ -169,14 +169,20 @@ def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = N
 
 
 # Words a finished sentence doesn't end on: the lead was cut off (paused to think) mid-sentence.
-DANGLING = re.compile(r"\b(the|a|an|and|or|but|of|to|for|with|when|what|which|where|how|is|are|was|about|"
-                      r"you|your|me|my|our|this|that|can|could|please|tell|like|so|because|if|then|"
-                      r"any|some|kya|ki|ka|ke|aur|ya|toh|mein)\s*(\.\.\.|…|\.|,)?\s*$", re.I)
+# Words a finished sentence doesn't end on. Used ONLY when the speech engine gave no full stop/question mark:
+# Twilio punctuates finished sentences ("Yes. It will work for me."), and cut-off ones arrive without it
+# ("Before going, can you please tell me when you"). So "…for me." / "Thank you." (with a full stop) are
+# always complete; only an unpunctuated ending on one of these words counts as cut off.
+DANGLING = re.compile(r"\b(the|a|an|and|or|but|of|to|for|with|when|what|which|where|how|about|your|my|our|"
+                      r"can|could|please|tell|because|if|any|some|is|are|was|has|have|you|me|this|that|like|so|"
+                      r"then|kya|ki|ka|ke|aur|ya|toh)\s*,?\s*$", re.I)
 
 
 def looks_unfinished(speech: str) -> bool:
     s = (speech or "").strip()
-    return bool(s) and len(s.split()) >= 2 and bool(DANGLING.search(s))
+    if not s or len(s.split()) < 2 or s[-1] in ".?!":
+        return False
+    return bool(DANGLING.search(s))
 
 
 def twiml_listen(lead_id: str, lang: str, stt: str | None, instant: bool) -> str:
@@ -237,7 +243,9 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number:
     from . import voices
     voice = (voice_override if voice_override and voices.valid(voice_override) else None)         or lead.get("voice") or await voices.selected(http)   # chosen in the dashboard
     stt = stt if stt in STT_PRESETS else stt_preset()
-    instant = (instant_on() if instant is None else instant) and cache.fast_enough()   # needs Redis to hand turns over
+    # Early answer needs Twilio to move a live call (REST update); the free trial refuses that (404 on real
+    # calls), so it stays off unless PHONE_INSTANT=1 is set on an upgraded account.
+    instant = instant_on() and cache.fast_enough()
     row = {
         "vapi_call_id": _sid_key(call_sid), "lead_id": lead.get("id"), "name": lead.get("name"),
         "phone": lead.get("phone") or to_number, "call_type": "twilioPhoneCall",
@@ -263,8 +271,10 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     messages = row.setdefault("messages", [])
     raw = row.setdefault("raw", {})
 
+    answer_now = False
     if (silence or not speech.strip()) and raw.get("pending"):
         speech, silence = raw.pop("pending"), False   # they stopped after all: answer what we heard
+        answer_now = True                              # (never wait on it a second time)
     if silence or not speech.strip():
         raw["silences"] = raw.get("silences", 0) + 1
         if raw["silences"] >= 2:
@@ -284,7 +294,7 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
                             row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"), raw.get("stt"), raw.get("instant", False))
     # Cut off mid-sentence ("can you please tell me when you…")? Don't answer half a question:
     # keep listening silently and join it with what they say next.
-    if looks_unfinished(speech) and not raw.get("pending"):
+    if not answer_now and looks_unfinished(speech) and not raw.get("pending"):
         raw["pending"] = speech.strip()
         await save_session(http, sb, call_sid, row)
         print(f"[phone] unfinished, still listening: {speech.strip()[:60]!r}", flush=True)
