@@ -130,9 +130,15 @@ ASKED = {
 }
 
 
+def _is_question(text: str) -> bool:
+    t = text.strip().lower()
+    return t.endswith("?") or bool(re.match(r"(how|what|when|where|which|why|is |are |can |could |do |does |tell me|please tell)", t))
+
+
 def covered(messages: list[dict]) -> set[str]:
     """What this call has already covered, read from the conversation itself."""
-    lead = " ".join(m["text"].lower() for m in messages if m["role"] == "user")
+    # Only the lead's ANSWERS count: "How far is Nandi Hills?" is a question, not "location is fine".
+    lead = " ".join(m["text"].lower() for m in messages if m["role"] == "user" and not _is_question(m["text"]))
     aanya = " ".join(m["text"].lower() for m in messages if m["role"] == "assistant")
     c = set()
     qs = _questions()
@@ -143,7 +149,7 @@ def covered(messages: list[dict]) -> set[str]:
         for i, m in enumerate(messages[:-1]):
             said = m["text"].lower()
             if m["role"] == "assistant" and (re.search(pat, said) or any(re.search(h, said) for h in heads)) and \
-                    any(x["role"] == "user" for x in messages[i + 1:]):
+                    any(x["role"] == "user" and not _is_question(x["text"]) for x in messages[i + 1:]):
                 c.add(step)
                 break
     if re.search(r"invest|weekend|self.?use|family|own use|khud|apne liye|rehne", lead):
@@ -200,6 +206,16 @@ def next_question(messages: list[dict], lang: str) -> str:
     # Don't repeat a question we asked in the last two replies — if the lead skipped it, move on.
     recent = " ".join(m["text"] for m in messages[-4:] if m["role"] == "assistant")
     pending = [s for s in ("intent", "geography", "budget", "timeline", "decision", "pitch", "callback") if s not in done]
+    # The lead interrupted with a question of their own: after answering it, come back to the question Divya
+    # was asking (at most twice per checkpoint), instead of silently skipping it.
+    last_user = next((m["text"] for m in reversed(messages) if m["role"] == "user"), "")
+    interrupted = "?" in last_user or bool(detect(last_user))
+    if interrupted and pending and pending[0] not in ("pitch", "callback"):
+        q = nq[pending[0]][lang]
+        times = sum(1 for m in messages if m["role"] == "assistant" and (q in m["text"] or nq[pending[0]]["en"] in m["text"]))
+        if times < 2:
+            back = ("Coming back to my question: " if lang == "en" else "Mere sawaal par wapas aate hain: ") if times else ""
+            return back + q
     for step in pending:
         if step == "callback":
             return cta_question(messages, lang)
