@@ -47,6 +47,9 @@ alter table leads add column if not exists next_call_at timestamptz;    -- when 
 alter table leads add column if not exists callback_note text;          -- what the lead said, e.g. "tomorrow 5 pm"
 alter table leads add column if not exists callback_tries int not null default 0;  -- unanswered call-backs (max 1 retry)
 create index if not exists leads_next_call_idx on leads (next_call_at) where next_call_at is not null;
+alter table leads add column if not exists score int;                -- from the latest call
+alter table leads add column if not exists next_action text;
+alter table leads add column if not exists decision_maker text;
 create index if not exists leads_status_idx on leads (status, attempts);
 
 -- 3. Calls: one row per finished call (written by n8n WF4)
@@ -85,20 +88,26 @@ create table if not exists calls (
 );
 create index if not exists calls_started_idx on calls (started_at desc);
 alter table calls add column if not exists call_back_at timestamptz;   -- busy lead: when Divya will call back
+-- Lead profile (score 0-100 with reasons, objections, decision maker, next action)
+alter table calls add column if not exists score int;
+alter table calls add column if not exists score_breakdown jsonb;
+alter table calls add column if not exists objections jsonb;
+alter table calls add column if not exists decision_maker text;
+alter table calls add column if not exists next_action text;
 
 -- 4. Public read views for the dashboard (phone numbers masked)
 create or replace view leads_public as
   select id, campaign_id, name,
          left(phone, 3) || ' xxxxx ' || right(phone, 3) as phone,
          location, budget, source, status, interest, attempts, last_called_at, callback_time, created_at,
-         re_engaged_at, next_call_at, callback_note
+         re_engaged_at, next_call_at, callback_note, score, next_action, decision_maker
   from leads;
 
 create or replace view calls_public as
   select id, vapi_call_id, lead_id, campaign_id, name, call_type, started_at, ended_at, duration_sec,
          ended_reason, recording_url, transcript, messages, summary, interest, intent, geography_fit,
          budget_fit, timeline_fit, sentiment_start, sentiment_end, language, callback_time, cost_usd,
-         call_back_at
+         call_back_at, score, score_breakdown, objections, decision_maker, next_action
   from calls;
 
 -- 5. Row Level Security: lock raw tables; expose only the views

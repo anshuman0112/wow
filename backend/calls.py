@@ -74,6 +74,9 @@ def build_row(msg: dict, call: dict) -> dict:
         "do_not_call": q.get("do_not_call") is True,
         "analysis": q, "raw": msg,
     }
+    if q:   # score 0-100 + reasons, objections, decider, next action (same rules as phone calls)
+        from . import scoring
+        row |= scoring.profile_fields(q, scoring.rules())
     # Never overwrite saved data with blanks (e.g. if the Vapi fetch failed).
     return {k: v for k, v in row.items() if v not in (None, "", [], {})}
 
@@ -140,7 +143,7 @@ async def apply_lead_update(sb: Supabase, row: dict, groq: "Groq | None" = None)
     patch = {"status": "do_not_call" if row.get("do_not_call") else ("no_answer" if no_answer else "called"),
              "last_called_at": row.get("ended_at") or datetime.now(timezone.utc).isoformat()}
     if not no_answer:
-        for k in ("interest", "callback_time"):
+        for k in ("interest", "callback_time", "score", "next_action", "decision_maker"):
             if row.get(k):
                 patch[k] = row[k]
     filters = {"id": f"eq.{row['lead_id']}"} if row.get("lead_id") else {"phone": f"eq.{row['phone']}"}

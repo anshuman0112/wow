@@ -66,7 +66,7 @@ export default async function callsView(el, [openId]) {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Lead</th><th>When</th><th>Duration</th><th>Language</th><th>Mood</th><th>Interest</th><th>Callback</th></tr></thead>
+            <thead><tr><th>Lead</th><th>When</th><th>Duration</th><th>Language</th><th>Mood</th><th>Score</th><th>Interest</th><th>Callback</th></tr></thead>
             <tbody>
               ${shown.map(c => `
                 <tr class="clickable" data-id="${esc(c.id)}" tabindex="0">
@@ -75,9 +75,10 @@ export default async function callsView(el, [openId]) {
                   <td class="mono">${fmtDur(c.duration_sec)}</td>
                   <td>${esc(c.language || '—')}</td>
                   <td>${moodBadge(c.sentiment_end)}</td>
+                  <td class="mono">${c.score ?? '—'}</td>
                   <td>${interestBadge(c.interest)}</td>
                   <td>${esc(c.callback_time || '—')}</td>
-                </tr>`).join('') || `<tr><td colspan="7" class="empty">${calls.length ? 'No calls match these dates and filter.' : 'No calls yet.'}</td></tr>`}
+                </tr>`).join('') || `<tr><td colspan="8" class="empty">${calls.length ? 'No calls match these dates and filter.' : 'No calls yet.'}</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -110,6 +111,30 @@ export default async function callsView(el, [openId]) {
   }
 }
 
+// The hand-back for the sales team: score with reasons (and the lead's own words), objections, who decides, next step.
+const DECIDER = { self: 'Decides alone', spouse: 'Decides with spouse', family: 'Decides with family', someone_else: 'Someone else decides', unknown: 'Not known' };
+function profileCard(c) {
+  if (c.score == null) return '';
+  const rows = c.score_breakdown || [];
+  return `
+    <section class="card card-pad">
+      <div class="row"><h3>Lead profile</h3><span class="spacer"></span>
+        <span class="mono" style="font-size:22px;font-weight:650">${c.score}<span class="muted small">/100</span></span> ${interestBadge(c.interest)}</div>
+      <div class="stack" style="gap:6px;margin-top:10px">
+        ${rows.map(r => `
+          <div class="row small" style="gap:8px;flex-wrap:nowrap;align-items:flex-start">
+            <span class="mono" style="min-width:44px;color:${r.points > 0 ? 'var(--ok, #2f7d4f)' : r.points < 0 ? 'var(--bad, #b3261e)' : 'var(--muted)'}">${r.points > 0 ? '+' : ''}${r.points}${r.max ? `/${r.max}` : ''}</span>
+            <span style="flex:1"><b>${esc(r.label)}</b>${r.evidence ? ` <span class="muted">· “${esc(r.evidence)}”</span>` : r.detail ? ` <span class="muted">· ${esc(r.detail)}</span>` : ''}</span>
+          </div>`).join('')}
+      </div>
+      <div class="grid g-2" style="margin-top:14px;gap:10px">
+        <div><div class="muted small">Decision maker</div><b>${esc(DECIDER[c.decision_maker] || c.decision_maker || '—')}</b></div>
+        <div><div class="muted small">Objections</div>${(c.objections || []).length ? `<ul style="margin:2px 0 0 16px;padding:0">${c.objections.map(o => `<li>${esc(o)}</li>`).join('')}</ul>` : '<b>None raised</b>'}</div>
+      </div>
+      ${c.next_action ? `<div class="banner" style="margin:14px 0 0">${icon('arrow')}<span><b>Next action:</b> ${esc(c.next_action)}</span></div>` : ''}
+    </section>`;
+}
+
 function openDrawer(c) {
   const bg = document.createElement('div');
   bg.className = 'drawer-bg';
@@ -124,6 +149,7 @@ function openDrawer(c) {
         <button class="btn btn-ghost" id="close" aria-label="Close">${icon('x')}</button>
       </div>
       <div class="drawer-body">
+        ${profileCard(c)}
         <section class="card card-pad">
           <h3>Recording</h3>
           ${c.recording_url

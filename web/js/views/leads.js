@@ -58,7 +58,7 @@ export default async function leadsView(el) {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Budget</th><th>Status</th><th>Interest</th><th>Callback</th><th>Source</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Budget</th><th>Status</th><th>Score</th><th>Interest</th><th>Callback</th><th>Source</th><th></th></tr></thead>
             <tbody>
               ${shown.map(l => `
                 <tr>
@@ -67,6 +67,7 @@ export default async function leadsView(el) {
                   <td>${esc(l.location || '—')}</td>
                   <td>${esc(l.budget || '—')}</td>
                   <td>${statusBadge(l.status)}${l.status === 're_engaged' && l.re_engaged_at ? `<div class="cell-sub">came back ${fmtDate(l.re_engaged_at)}</div>` : ''}${l.next_call_at ? `<div class="cell-sub">auto-call ${fmtDate(l.next_call_at)}</div>` : l.status === 'no_answer' && l.attempts >= 3 ? '<div class="cell-sub">unreachable, stopped</div>' : ''}</td>
+                  <td class="mono" title="${esc(l.next_action || '')}">${l.score ?? '—'}</td>
                   <td>${interestBadge(l.interest)}</td>
                   <td>${esc(l.callback_time || '—')}</td>
                   <td class="cell-sub">${esc(l.source || '—')}<br>${fmtDate(l.created_at)}</td>
@@ -76,7 +77,7 @@ export default async function leadsView(el) {
                         <button class="btn small" data-call="${esc(l.id)}" title="${realCalls ? 'Ring this lead\'s real phone' : 'Start a browser call with Divya, personalised for this lead'}" ${realCalls && (mode() === 'demo' || l.status === 'calling') ? 'disabled' : ''}>${icon('phone')}${realCalls ? (l.status === 'calling' ? 'Calling…' : 'Call phone') : 'Call now'}</button>
                         ${realCalls ? `<a class="btn btn-ghost small" href="#/talk/${esc(l.id)}" title="Talk to Divya in the browser as this lead">Web call</a>` : ''}
                       </div>`}</td>
-                </tr>`).join('') || `<tr><td colspan="9" class="empty">No leads match.</td></tr>`}
+                </tr>`).join('') || `<tr><td colspan="10" class="empty">No leads match.</td></tr>`}
             </tbody>
           </table>
         </div>

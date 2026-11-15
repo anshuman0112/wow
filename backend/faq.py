@@ -66,6 +66,7 @@ ASKED = {
     "geography": r"comfortable with .*(nandi|devanahalli|location|area)|(nandi|devanahalli).*(theek|comfortable)",
     "budget": r"(fit|work|within|suit)\w* .{0,25}budget|budget mein|budget ke hisaab",
     "timeline": r"(december 2029|possession|timeline).{0,60}(comfortable|okay|work|theek)",
+    "decision": r"anyone else .{0,40}decision|decision mein koi|who (else )?(will )?decide",
 }
 
 
@@ -101,7 +102,7 @@ def next_question(messages: list[dict], lang: str) -> str:
     nq = data()["nextQuestion"]
     # Don't repeat a question we asked in the last two replies — if the lead skipped it, move on.
     recent = " ".join(m["text"] for m in messages[-4:] if m["role"] == "assistant")
-    pending = [s for s in ("intent", "geography", "budget", "timeline", "pitch", "callback") if s not in done]
+    pending = [s for s in ("intent", "geography", "budget", "timeline", "decision", "pitch", "callback") if s not in done]
     for step in pending:
         if nq[step][lang] not in recent and nq[step]["en"] not in recent:
             return nq[step][lang]

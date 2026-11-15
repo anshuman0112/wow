@@ -145,6 +145,14 @@
       "line": "The project is being delivered in phases, with possession planned for December 2029. Is that timeline comfortable?"
     },
     {
+      "key": "decision",
+      "title": "Decision maker",
+      "pdf": false,
+      "checkpoint": false,
+      "detail": "Soft extra question (like Revspot's 'decision authority'): who else is part of the decision.",
+      "line": "And will anyone else be part of this decision, like family?"
+    },
+    {
       "key": "pitch",
       "title": "The pitch",
       "pdf": true,
@@ -484,6 +492,10 @@
       "en": "Possession is planned for December 2029. Is that timeline comfortable?",
       "hi": "Possession December 2029 tak hai. Kya yeh timeline theek hai?"
     },
+    "decision": {
+      "en": "And will anyone else be part of this decision, like family?",
+      "hi": "Aur kya is decision mein koi aur bhi shaamil hoga, jaise family?"
+    },
     "pitch": {
       "en": "Imagine your own private valley at the foot of Nandi Hills: seventy-four percent open green space, eco-parks, a twenty thousand square foot clubhouse, and a like-minded community of homeowners. What day and time would suit a short call with our Property Expert?",
       "hi": "Sochiye, Nandi Hills ke paas aapki apni private valley: seventy-four percent open green space, eco-parks, twenty thousand square foot ka clubhouse, aur like-minded community. Hamare Property Expert ke saath short call ke liye kaunsa din aur time theek rahega?"
@@ -542,5 +554,52 @@
       "Divyasree",
       "Divya shree"
     ]
-  ]
+  ],
+  "scoring": {
+    "note": "Lead score 0-100, computed from what the lead actually said. Edit on the Settings page.",
+    "points": {
+      "intent": {
+        "label": "Intent is clear",
+        "max": 15
+      },
+      "geography": {
+        "label": "Location works",
+        "max": 20,
+        "partial": 10
+      },
+      "budget": {
+        "label": "Budget fits (₹92.4 L+)",
+        "max": 25,
+        "partial": 12
+      },
+      "timeline": {
+        "label": "Timeline works (Dec 2029)",
+        "max": 15,
+        "partial": 7
+      },
+      "decision": {
+        "label": "Decision maker known",
+        "max": 10,
+        "partial": 4
+      },
+      "callback": {
+        "label": "Expert call booked",
+        "max": 15
+      }
+    },
+    "tone": {
+      "positive": 0,
+      "calm": 0,
+      "hesitant": -5,
+      "irritated": -10,
+      "angry": -20
+    },
+    "tiers": {
+      "hot": 70,
+      "warm": 40
+    },
+    "hot_requires": [
+      "budget"
+    ]
+  }
 }

@@ -23,6 +23,7 @@ import httpx
 
 from . import cache, faq
 from .calls import apply_lead_update
+from . import scoring
 from .campaign import LEAD_ANALYSIS_OUTPUT
 from .clients import Groq, Supabase, telegram_alert
 from .settings import settings
@@ -54,7 +55,7 @@ RULE 2 — NEVER INVENT: only state FACTS below. Price range is ninety-two point
 RULE 3 — STYLE: max 2 short sentences; one question per turn; varied affirmation (Understood / Perfect / Got it); never re-ask what the lead already told you; money in words; admit you are Divyasree's AI assistant if asked; after two refusals or "don't call", apologise and end.
 RULE 4 — UNCLEAR SPEECH: phone transcription can be wrong (e.g. "7260 lacs" probably means "70 lakh"). If a number or answer looks odd, confirm it briefly ("Just to confirm, about seventy lakh?").
 
-FLOW (skip answered steps; only move on when the lead has no open question): 1) Intent: weekend home or investment? 2) Geography: comfortable with Nandi Hills/Devanahalli near the airport corridor? 3) Budget: plots start at ninety-two point four lakh incl. taxes, does that work? 4) Timeline: phased delivery, possession December 2029, comfortable? 5) PITCH (required, never skip): in the same turn as step 6, first paint the picture in one sentence: "a private valley with 74% open green space, eco-parks, Nandi Hills views and a 20,000 sq ft clubhouse, among a like-minded community". 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
+FLOW (skip answered steps; only move on when the lead has no open question): 1) Intent: weekend home or investment? 2) Geography: comfortable with Nandi Hills/Devanahalli near the airport corridor? 3) Budget: plots start at ninety-two point four lakh incl. taxes, does that work? 4) Timeline: phased delivery, possession December 2029, comfortable? 4b) Decision (one soft question, skip if already known): "Will anyone else be part of this decision, like family?" 5) PITCH (required, never skip): in the same turn as step 6, first paint the picture in one sentence: "a private valley with 74% open green space, eco-parks, Nandi Hills views and a 20,000 sq ft clubhouse, among a like-minded community". 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
 
 OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; busy -> ask WHEN to call back ("No problem! When would be a good time for me to call you back?"); when they give a time, repeat it back ("Perfect, I'll call you back tomorrow at 5 pm. Thank you!") and end; never suggest a time yourself; if they won't give one, say you'll try again later and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
 
@@ -303,6 +304,8 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
             out.update({"reply": faq.fallback_reply(messages, lang), "end": False, "lang": lang,
                         "_usage": {"model": "rule:fallback", "prompt_tokens": 0, "completion_tokens": 0}})
     reply = speakable(out.get("reply") or "")
+    if out.get("end") and reply.rstrip().endswith("?"):
+        out["end"] = False   # Divya is still asking something: never hang up on an open question
     if reply and "?" not in reply and not out.get("end"):
         reply = f"{reply} {faq.next_question(messages + [{'role': 'assistant', 'text': reply}], out.get('lang') or lang)}"
     out["reply"] = reply   # never leave the lead in dead air: every turn ends with the next question
@@ -352,6 +355,7 @@ async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "cu
         "sentiment_end": q.get("sentiment_end"), "language": q.get("language"),
         "callback_time": q.get("callback_time") or None, "do_not_call": q.get("do_not_call") is True,
         "analysis": q, "cost_usd": 0,
+        **scoring.profile_fields(q, scoring.rules()),   # score 0-100 + reasons, objections, decider, next action
         "messages": messages, "raw": row.get("raw"),
     }
     update = {k: v for k, v in update.items() if v is not None}
