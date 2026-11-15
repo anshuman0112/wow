@@ -168,3 +168,30 @@ def sources_status() -> dict:
 def clean_source(s: str) -> str:
     s = re.sub(r"[^\w\s/+.-]", "", str(s or "")).strip()
     return s[:40] or "Webhook"
+
+
+async def auto_call_added(http: httpx.AsyncClient, lead_ids: list[str], *, immediate: bool) -> str:
+    """Leads added by hand or uploaded: call one right away (hand-added) or queue them for the scheduler,
+    which dials a few per run (Settings → New leads → calls per run), only inside calling hours."""
+    from . import config_store, phone
+    sb = Supabase(http)
+    now = datetime.now(timezone.utc)
+    if not callbacks.is_calling_hours(now):
+        at = next_window_start(now)
+        for i in range(0, len(lead_ids), 100):
+            chunk = ",".join(lead_ids[i:i + 100])
+            await sb.update("leads", {"id": f"in.({chunk})"}, {"next_call_at": at.isoformat(),
+                            "callback_note": f"added after hours, first call {callbacks.fmt_ist(at)}"})
+        return f"{len(lead_ids)} lead(s) will be called from {callbacks.fmt_ist(at)} (outside calling hours)"
+    if immediate and len(lead_ids) == 1:
+        try:
+            await phone.call_lead(http, lead_ids[0])
+            return "calling now"
+        except phone.CallError as e:
+            await sb.update("leads", {"id": f"eq.{lead_ids[0]}"}, {"callback_note": f"first call not possible: {str(e)[:150]}"})
+            return f"not called: {e}"
+    for i in range(0, len(lead_ids), 100):   # due now: the scheduler picks them up a few at a time
+        chunk = ",".join(lead_ids[i:i + 100])
+        await sb.update("leads", {"id": f"in.({chunk})"}, {"next_call_at": now.isoformat(), "callback_note": "queued for automatic calling"})
+    per = config_store.current()["speed_to_lead"]["per_run"]
+    return f"{len(lead_ids)} lead(s) queued: about {per} called every 5 minutes"

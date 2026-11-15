@@ -39,7 +39,8 @@ def defaults() -> dict:
         "scoring": json.loads(json.dumps(d.get("scoring") or {})),
         "calling_hours": {"start": 9, "end": 21},
         "retry": ["2h", "next 11:00"],
-        "speed_to_lead": {"enabled": True},
+        # enabled = website/ads/forms; manual = added by hand on Leads; imports = file uploads (paced by per_run)
+        "speed_to_lead": {"enabled": True, "manual": True, "imports": True, "per_run": 3},
         "handoff": {"sales_whatsapp": "", "crm_webhook": ""},
     }
 
@@ -131,7 +132,10 @@ def validate(cfg: dict) -> dict:
     if len(steps) > 6 or any(not RETRY_RE.match(s) for s in steps):
         raise ValueError('Re-attempts: up to 6 steps like "10m", "2h" or "next 11:00".')
     out["retry"] = steps
-    out["speed_to_lead"]["enabled"] = bool(out["speed_to_lead"].get("enabled"))
+    stl = out["speed_to_lead"]
+    for k in ("enabled", "manual", "imports"):
+        stl[k] = bool(stl.get(k))
+    stl["per_run"] = max(1, min(10, int(stl.get("per_run") or 3)))
     wa = re.sub(r"[^\d+]", "", str(out["handoff"].get("sales_whatsapp") or ""))
     out["handoff"]["sales_whatsapp"] = wa[:16]
     url = str(out["handoff"].get("crm_webhook") or "").strip()

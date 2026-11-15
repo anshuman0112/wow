@@ -81,6 +81,12 @@ export default async function settingsView(el) {
           <h2>New leads</h2>
           <label class="row small" style="gap:8px;margin-top:8px"><input type="checkbox" data-bool="speed_to_lead.enabled" ${s.speed_to_lead.enabled ? 'checked' : ''}>
             Call every new lead automatically within seconds of arriving (website form, Facebook, Instagram, Google Ads)</label>
+          <label class="row small" style="gap:8px;margin-top:6px"><input type="checkbox" data-bool="speed_to_lead.manual" ${s.speed_to_lead.manual ? 'checked' : ''}>
+            Also call leads added by hand on the Leads page, right away</label>
+          <label class="row small" style="gap:8px;margin-top:6px"><input type="checkbox" data-bool="speed_to_lead.imports" ${s.speed_to_lead.imports ? 'checked' : ''}>
+            Also call uploaded leads (Excel, CSV, JSON, SQL), a few at a time</label>
+          <label class="row small" style="gap:6px;margin-top:6px">Uploaded leads called per scheduler run (about every 5 minutes)
+            ${num('speed_to_lead.per_run', s.speed_to_lead.per_run ?? 3, 'min="1" max="10"')}</label>
           <p class="muted small" style="margin-top:6px">Outside calling hours they are called at the start of the next window. On the free Twilio trial only verified numbers can be called.</p>
         </section>
         <section class="card card-pad">

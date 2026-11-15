@@ -165,7 +165,18 @@ class ImportRequest(BaseModel):
 
 @app.post("/api/leads/import")
 async def leads_import(req: ImportRequest, http: httpx.AsyncClient = Depends(http_client)):
-    return await leads.import_leads(Supabase(http), req.leads)
+    """Upload or hand-add leads; then (Settings → New leads) call them automatically: hand-added right away,
+    uploaded ones paced by the scheduler. Duplicates already in the list are never called again."""
+    from . import config_store, intake
+    res = await leads.import_leads(Supabase(http), req.leads)
+    ids = res.pop("_call_ids", [])
+    stl = config_store.current()["speed_to_lead"]
+    manual = bool(req.leads) and all(str(r.get("source") or "") == "added by hand" for r in req.leads)
+    if ids and (stl["manual"] if manual else stl["imports"]):
+        res["auto_call"] = await intake.auto_call_added(http, ids, immediate=manual)
+    elif ids:
+        res["auto_call"] = "automatic calling is off for these leads (Settings → New leads)"
+    return res
 
 
 # ── Real phone calls ─────────────────────────────────────────────────────────
@@ -462,7 +473,7 @@ async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key
     """Called every few minutes by the scheduler: dial every lead whose call-back time has come.
     Safe to call any time: it only ever dials leads that are due, at most 3 per run, inside calling hours."""
     import os
-    from . import callbacks
+    from . import callbacks, config_store
     secret = os.environ.get("DIALER_SECRET", "")
     if secret and not hmac.compare_digest(x_dialer_key or key, secret):
         raise HTTPException(401, "bad dialer key")
@@ -471,7 +482,8 @@ async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key
         return {"dialled": [], "reason": "outside calling hours (9 am - 9 pm IST)"}
     sb = Supabase(http)
     due = await sb.select("leads", {"select": "id,name,status,callback_tries", "status": "in.(callback,no_answer,new,re_engaged)",
-                                    "next_call_at": f"lte.{now.isoformat()}", "order": "next_call_at.asc", "limit": "3"})
+                                    "next_call_at": f"lte.{now.isoformat()}", "order": "next_call_at.asc",
+                                    "limit": str(config_store.current()["speed_to_lead"]["per_run"])})
     done = []
     for lead in due:
         # Claim it first (clears the time) so two scheduler runs can never dial the same lead twice.

@@ -91,6 +91,7 @@ async def import_leads(sb: Supabase, rows: list[dict]) -> dict:
             existing[e["phone"]] = e
 
     report: dict[str, list[dict]] = {"re_engaged": [], "already_contacted": [], "already_listed": [], "do_not_call": []}
+    reengaged_ids: list[str] = []
     new = [l for l in leads if l["phone"] not in existing]
     now = datetime.now(timezone.utc)
     for l in leads:
@@ -100,6 +101,8 @@ async def import_leads(sb: Supabase, rows: list[dict]) -> dict:
         kind = duplicate_kind(e)
         report[kind].append({"name": e.get("name") or l.get("name") or "Unknown", "status": e.get("status"),
                              "interest": e.get("interest")})
+        if kind == "re_engaged":
+            reengaged_ids.append(e["id"])
         if kind == "re_engaged":   # same person came back: flag them so the team calls again
             note = f"Re-enquired {now:%d %b %Y} via {l.get('source') or 'import'}"
             await sb.update("leads", {"id": f"eq.{e['id']}"}, {
@@ -108,5 +111,6 @@ async def import_leads(sb: Supabase, rows: list[dict]) -> dict:
 
     saved = await sb.upsert("leads", new, "phone", ignore_duplicates=True, returning=True) if new else []
     return {"received": len(rows), "imported": len(saved), "new": [s.get("name") or s["phone"][-4:] for s in saved],
+            "_call_ids": [s["id"] for s in saved if s.get("id")] + reengaged_ids,
             "duplicates_in_file": max(in_file_dupes, 0),
             "invalid": sum(1 for r in rows if not normalise_phone(r.get("phone"))), **report}

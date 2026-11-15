@@ -38,7 +38,7 @@ export default async function queueView(el) {
       rank(a) - rank(b) || String(a.next_call_at || a.re_engaged_at || a.created_at).localeCompare(String(b.next_call_at || b.re_engaged_at || b.created_at)));
     const count = k => k === 'all' ? queue.length : queue.filter(l => l.kind === k).length;
     const when = l => {
-      if (KINDS[l.kind].auto && l.next_call_at) return due(l)
+      if (l.next_call_at) return due(l)
         ? '<b>Due now</b><div class="cell-sub">auto-dial within ~5 min</div>'
         : `Auto: <b>${esc(fmtDate(l.next_call_at))}</b>`;
       return '<span class="muted">Call when ready</span>';

@@ -113,7 +113,7 @@ export default async function leadsView(el) {
       try {
         report = await addLeads([{ name: f.name?.trim() || null, phone, location: f.location?.trim() || null, source: 'added by hand', extra: {} }]);
         leads = await getLeads();
-        toast(report.imported ? 'Lead added' : 'That phone number is already a lead — see the summary above');
+        toast(report.imported ? `Lead added${report.auto_call ? ` · ${report.auto_call}` : ''}` : 'That phone number is already a lead — see the summary above');
         if (report.imported) report = null;
         draw();
       } catch (ex) { err.textContent = ex.message; }
@@ -180,6 +180,7 @@ function importReport(r) {
         <p class="muted small">Duplicates are matched by phone number: the same number is always the same person.</p></div>
         <span class="spacer"></span><button class="btn btn-ghost small" id="close-report">Close</button></div>
       <div class="card-pad stack" style="gap:12px">
+        ${r.auto_call ? `<div class="banner" style="margin:0">${icon('phone')}<span><b>Automatic calling:</b> ${esc(r.auto_call)}</span></div>` : ''}
         <div><span class="badge b-ok">${r.imported} new</span>
           ${r.new?.length ? `<span class="small muted" style="margin-left:8px">${names(r.new)}</span>` : ''}
           ${r.invalid ? `<span class="badge" style="margin-left:8px">${r.invalid} without a valid phone</span>` : ''}</div>
