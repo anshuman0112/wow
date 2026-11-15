@@ -137,6 +137,14 @@ def stt_attrs(stt: str | None, lang: str) -> str:
     return STT_PRESETS[stt]
 
 
+def barge_in() -> bool:
+    """Let the lead talk over Divya? Off by default: on phone lines, noise and the echo of her own voice were
+    heard as "the lead is talking", which kept cutting her off mid-word (sounded like a breaking voice).
+    With it off she finishes each reply cleanly and listening starts the moment she stops."""
+    import os
+    return os.environ.get("PHONE_BARGE_IN", "0") == "1"
+
+
 def instant_on() -> bool:
     import os
     return os.environ.get("PHONE_INSTANT", "0") == "1"
@@ -150,11 +158,12 @@ def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = N
     # answered at once instead of after the silence wait.
     partial_url = escape(f"{base}/api/phone/partial?lead={quote(lead_id)}")
     partial = f' partialResultCallback="{partial_url}"' if instant else ""
+    barge = "true" if barge_in() else "false"
     silence = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}&silence=1")
     language = "hi-IN" if lang == "hi" else "en-IN"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
             f'<Gather input="speech" action="{action}" method="POST" language="{language}" '
-            f'{stt_attrs(stt, lang)}{partial} timeout="6" bargeIn="true" hints="{escape(HINTS)}" actionOnEmptyResult="false">'
+            f'{stt_attrs(stt, lang)}{partial} timeout="6" bargeIn="{barge}" hints="{escape(HINTS)}" actionOnEmptyResult="false">'
             f'{says(say, voice)}</Gather>'
             f'<Redirect method="POST">{silence}</Redirect></Response>')
 
