@@ -98,9 +98,11 @@ class Twilio:
             data |= {"Record": "true", "RecordingChannels": "mono", "RecordingStatusCallback": recording_callback,
                      "RecordingStatusCallbackEvent": "completed"}
         r = await self.http.post(url, data=data, auth=self.auth)
-        if r.status_code == 400 and recording_callback and "record" in r.text.lower():
-            # The account refused recording: place the call without it (the transcript is still saved).
-            data = {k: v for k, v in data.items() if not k.startswith(("Record", "RecordingStatus"))}
+        if r.status_code == 400 and recording_callback:
+            # The account refused recording (trial: "disallowed parameters"): call without it, but KEEP the
+            # end-of-call callback so the summary, score and booked time are still saved.
+            print(f"[twilio] recording refused, calling without it: {r.text[:120]}", flush=True)
+            data = {k: v for k, v in data.items() if not k.startswith("Record")}
             r = await self.http.post(url, data=data, auth=self.auth)
         if r.status_code == 400 and status_callback and "parameter" in r.text.lower():
             # Trial accounts restrict some parameters — retry with the bare minimum.

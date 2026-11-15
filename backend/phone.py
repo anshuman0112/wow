@@ -7,6 +7,8 @@ Two ways out, picked automatically:
 """
 from __future__ import annotations
 
+import os
+
 from datetime import datetime, timezone
 from urllib.parse import quote
 from xml.sax.saxutils import escape
@@ -76,7 +78,10 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str, callback: bool = Fals
         else:                                 # free trial: Twilio speech + Python conversation loop
             url = f"{base}/api/phone/start{q}"
         res = await Twilio(http).call(lead["phone"], s.twilio_number, url, status_callback=f"{base}/api/phone/status{q}",
-                                      recording_callback=f"{s.public_base_url}/api/phone/recording")
+                                      # Twilio's free trial refuses recording ("trial accounts have limited parameter
+                                      # access"); set PHONE_RECORD=1 after upgrading to record every call.
+                                      recording_callback=f"{s.public_base_url}/api/phone/recording"
+                                      if os.environ.get("PHONE_RECORD") == "1" else None)
         await dialled()
         return {"ok": True, "via": s.phone_line, "id": res.get("sid")}
     except Exception as e:

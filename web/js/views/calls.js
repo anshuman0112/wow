@@ -183,7 +183,7 @@ function openDrawer(c) {
           ${c.recording_url
             ? `<audio controls preload="none" src="${esc(c.recording_url)}" style="width:100%;margin-top:10px"></audio>`
             : c.call_type === 'twilioPhoneCall'
-              ? `<p class="muted small" style="margin-top:6px">No recording for this phone call (calls placed before recording was switched on, or the recording is still being saved: refresh in a minute). The full transcript is below.</p>`
+              ? `<p class="muted small" style="margin-top:6px">Phone calls are not recorded on the free Twilio trial (Twilio refuses recording on trial accounts; it switches on after an upgrade). The full transcript is below.</p>`
               : `<p class="muted small" style="margin-top:6px">${mode() === 'demo' ? 'Sample call — no audio.' : 'No recording was saved for this call.'} Recorded calls play here (stored in Supabase Storage).</p>`}
         </section>
 
