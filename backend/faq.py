@@ -156,7 +156,7 @@ def covered(messages: list[dict]) -> set[str]:
         c.add("geography")
     if re.search(r"2029|possession|timeline|no hurry|no rush|can wait|ready to move|december .{0,20}(fine|ok|okay|works)", lead):
         c.add("timeline")
-    if re.search(r"(my )?(wife|husband|spouse|partner|parents|family|brother|sister).{0,30}(decide|decision|together|and i|with me)|"
+    if re.search(r"\b(my )?(wife|husband|spouse|partner|parents|family|brother|sister)\b.{0,30}(decide|decision|together|and i|with me)|"
                  r"(i|me) (alone|myself)|i (will )?decide|just me|only me|no one else", lead):
         c.add("decision")
     # Only the real lifestyle pitch counts — listing "74% open space" among amenities is not the pitch.
@@ -303,6 +303,19 @@ SLOT = re.compile(
     r"(\s+(saat|aath|nau|das|gyarah|barah|ek|do|teen|chaar|paanch|chhe)\s+baje)?)", re.I)
 
 
+def _complete_slot(slot: str, said: str) -> str:
+    """Say the time back exactly: "Tomorrow around of 1PM" -> "tomorrow at 1 pm" (the time must never be dropped)."""
+    t = re.search(r"\b(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?m\.?|p\.?m\.?)", said, re.I)
+    if t and not re.search(r"\d", slot):
+        mins = f":{t.group(2)}" if t.group(2) and t.group(2) != "00" else ""
+        slot = f"{slot} at {t.group(1)}{mins} {t.group(3).replace('.', '').lower()}"
+    elif not re.search(r"\d", slot):
+        part = re.search(r"\b(morning|afternoon|evening|night|subah|dopahar|shaam|raat)\b", said, re.I)
+        if part and part.group(1).lower() not in slot.lower():
+            slot = f"{slot} {part.group(1).lower()}"
+    return re.sub(r"^(Tomorrow|Today)\b", lambda x: x.group(1).lower(), slot)
+
+
 def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     """The lead gave a day/time for the Property Expert call → confirm exactly what they said and close politely.
     Not for "call me back later" requests (that's the busy flow)."""
@@ -319,6 +332,7 @@ def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     if not ("expert" in low or asked_slot or has_time):
         return None
     slot = re.sub(r"\s+", " ", m.group(1)).strip()
+    slot = _complete_slot(slot, last)
     pitch = "pitch" in covered(messages)
     if lang == "en":
         extra = "" if pitch else ("They'll walk you through our private valley with seventy-four percent open green space, "

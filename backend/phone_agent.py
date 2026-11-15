@@ -489,6 +489,9 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
         nxt = faq.next_question(messages, lang)
         if "price" in intents and "lakh" in nxt.lower():   # price just answered: don't repeat it in the budget question
             nxt = "Would that range work for you?" if lang == "en" else "Kya yeh range aapke liye theek hai?"
+        if "amenities" in intents and "private valley" in nxt.lower() and lang == "en":   # amenities just listed: shorter pitch
+            nxt = ("Imagine your own private valley at the foot of Nandi Hills, with a like-minded community of homeowners. "
+                   "What day and time would suit a short call with our Property Expert?")
         if "possession" in intents and "2029" in nxt:      # possession just answered: don't repeat it in the timeline question
             nxt = "Is that timeline comfortable for you?" if lang == "en" else "Kya yeh timeline aapke liye theek hai?"
         # A natural acknowledgement before the facts, rotated so it never sounds repetitive.
