@@ -1,0 +1,60 @@
+{
+  "id": "wowDialerEvery1m",
+  "name": "WOW 1 · Dialer (every minute)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Small helper: call the WOW app with the shared key.\nconst call = (path, qs = {}) => this.helpers.httpRequest({\n  method: 'GET', url: 'https://vaani-divyasree.vercel.app/api' + path, qs, json: true, timeout: 90000,\n  headers: { 'X-Dialer-Key': $env.DIALER_SECRET },\n});\n\n// Every minute: the app dials whoever is due (call-backs, re-attempts, new leads incl. CSV uploads),\n// max a few per run, only 9 am - 9 pm IST. Safe to run as often as you like.\nconst res = await call('/dialer/tick');\nreturn [{ json: { checked_at: res.checked_at || new Date().toISOString(), dialled: res.dialled || [], note: res.reason || '' } }];"
+      },
+      "name": "Ask app to dial due leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "ask-app-to-dial-due-leads"
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Ask app to dial due leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "tags": []
+}

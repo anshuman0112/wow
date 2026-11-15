@@ -1,0 +1,60 @@
+{
+  "id": "wowSheetToLeads1",
+  "name": "WOW 4 · Google Sheet to leads",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Every minute: new rows in a Google Sheet (published as CSV) become leads; the app then calls them.\n// Sheet columns: name, phone, location, budget, notes (header row first). Rows already sent are remembered.\nconst url = $env.LEADS_SHEET_CSV_URL;\nif (!url) return [];\nconst csv = await this.helpers.httpRequest({ method: 'GET', url, timeout: 30000 });\nconst lines = String(csv).split(/\\r?\\n/).filter(l => l.trim());\nif (lines.length < 2) return [];\nconst split = l => (l.match(/(\"([^\"]|\"\")*\"|[^,]*)(,|$)/g) || []).map(c => c.replace(/,$/, '').replace(/^\"|\"$/g, '').replace(/\"\"/g, '\"').trim());\nconst head = split(lines[0]).map(h => h.toLowerCase());\nconst col = k => head.findIndex(h => h.includes(k));\nconst memory = $getWorkflowStaticData('global');\nmemory.sent = memory.sent || {};\nconst out = [];\nfor (const line of lines.slice(1)) {\n  const c = split(line);\n  const phone = (c[col('phone')] || c[col('mobile')] || '').trim();\n  const key = phone.replace(/\\D/g, '').slice(-10);\n  if (key.length < 10 || memory.sent[key]) continue;\n  const res = await this.helpers.httpRequest({ method: 'POST', url: 'https://vaani-divyasree.vercel.app/api/leads/inbound', json: true, timeout: 60000,\n    body: { name: c[col('name')] || '', phone, location: c[col('location')] || c[col('city')] || '',\n            budget: c[col('budget')] || '', notes: c[col('note')] || '', source: 'Google Sheet' } });\n  memory.sent[key] = new Date().toISOString();\n  out.push({ json: { phone, result: res.call || res.duplicate || 'saved' } });\n}\nreturn out;"
+      },
+      "name": "New sheet rows to leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "new-sheet-rows-to-leads"
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "New sheet rows to leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "tags": []
+}

@@ -28,7 +28,7 @@ PUBLIC = [
     r"^/api/leads/inbound$", r"^/api/leads/meta$", r"^/api/leads/google$",        # lead sources
     r"^/api/phone/(start|turn|status|stream-start|relay-start|partial|next|recording)$", r"^/api/twiml(/.*)?$",     # Twilio (signature-checked)
     r"^/api/vapi/events$",                                                     # Vapi (secret-checked)
-    r"^/api/dialer/tick$",                                                     # scheduler (dials only due leads)
+    r"^/api/dialer/tick$", r"^/api/automation/(events|report)$",   # n8n / GitHub scheduler (secret-key checked)                                                     # scheduler (dials only due leads)
     r"^/api/handoff/echo$",                                                    # CRM test receiver (write-only)
 ]
 _PUBLIC_RE = [re.compile(p) for p in PUBLIC]

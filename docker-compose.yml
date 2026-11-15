@@ -26,6 +26,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro
+      - ./n8n/automation:/automation:ro       # current automations: dialer, Hot alert, daily report, sheet → leads
 
 volumes:
   n8n_data:

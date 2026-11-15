@@ -1,0 +1,95 @@
+{
+  "id": "wowDailyReport7p",
+  "name": "WOW 3 · Daily report (7 pm)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 19 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Every day 7 pm",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Small helper: call the WOW app with the shared key.\nconst call = (path, qs = {}) => this.helpers.httpRequest({\n  method: 'GET', url: 'https://vaani-divyasree.vercel.app/api' + path, qs, json: true, timeout: 90000,\n  headers: { 'X-Dialer-Key': $env.DIALER_SECRET },\n});\n\n// 7 pm: today's numbers from the app, written as a short email.\nconst r = await call('/automation/report');\nconst booked = (r.expert_calls_booked || []).map(b => `  - ${b.name}: ${b.time}`).join('\\n') || '  (none)';\nconst backs = (r.call_backs_scheduled || []).map(b => `  - ${b.name}: ${b.at}`).join('\\n') || '  (none)';\nconst text = `WOW · Divya daily report · ${r.date}\n\nCalls today: ${r.calls} (${r.minutes} minutes)\n  Hot ${r.hot} · Warm ${r.warm} · Cold ${r.cold}\nNew leads today: ${r.new_leads}\n\nProperty Expert calls booked:\n${booked}\n\nDivya call-backs scheduled:\n${backs}\n\nDashboard: https://vaani-divyasree.vercel.app/#/calls`;\nif (!$env.ALERT_EMAIL) return [];\nreturn [{ json: { subject: `Divya daily report · ${r.date}: ${r.calls} calls, ${r.hot} Hot`, text } }];"
+      },
+      "name": "Build the report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "build-the-report"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_FROM_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "name": "Email the report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        520,
+        0
+      ],
+      "id": "email",
+      "credentials": {
+        "smtp": {
+          "id": "wowGmailSmtp0001",
+          "name": "Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every day 7 pm": {
+      "main": [
+        [
+          {
+            "node": "Build the report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build the report": {
+      "main": [
+        [
+          {
+            "node": "Email the report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "tags": []
+}

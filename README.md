@@ -125,8 +125,25 @@ flowchart LR
   and the system calls back then with *"You had asked me to call you back around now"*.
 - **No answer:** retried after 2 hours, then next day at 11 am, then stopped (marked unreachable).
 - **Polite limits:** only 9 am – 9 pm IST, at most 2 call-backs per lead, and "don't call me" always wins.
-- **Scheduler:** a free GitHub Actions job (`.github/workflows/callbacks.yml`) calls `/api/dialer/tick` about every
-  5 minutes, so a call-back lands within roughly 5–15 minutes of the requested time.
+- **Scheduler:** n8n checks every minute (below); a free GitHub Actions job (`.github/workflows/callbacks.yml`) is the
+  backup when the laptop running n8n is off. Both send the shared key `DIALER_SECRET`; the app claims each lead before
+  dialling, so two schedulers never call the same person twice.
+
+### n8n automation (runs in Docker on the laptop)
+The app decides *who* to call and *what* to say; n8n is the alarm clock and the messenger.
+
+| Workflow | Runs | Small example |
+|---|---|---|
+| **WOW 1 · Dialer** | every minute | Priya said "call me at 5 pm" → at 5:00–5:01 pm Divya calls her. New leads, CSV uploads, call-backs and re-attempts are all dialled this way (max 3 per minute, 9 am – 9 pm IST). |
+| **WOW 2 · Hot-lead alert** | every minute | Sneha's call ends Hot (90) → sales gets an email: name, phone, score, budget, booked expert call, link to the call. |
+| **WOW 3 · Daily report** | 7 pm | "Today: 12 calls · 4 Hot · 5 Warm · 3 Cold · expert calls booked: …" by email. |
+| **WOW 4 · Google Sheet → leads** | every minute | Marketing adds rows (name, phone, location) to a sheet → they become leads → Divya calls them. |
+
+Setup: `docker compose up -d`, open http://localhost:5678, then `python n8n/automation/build.py` and import the files in
+`n8n/automation/` (or run the `n8n import:workflow --separate --input=/automation` command in the container). Settings
+the workflows read from `.env`: `DIALER_SECRET`, `ALERT_EMAIL`, `ALERT_FROM_EMAIL`, `LEADS_SHEET_CSV_URL`.
+Emails use a Gmail **App password** saved in n8n as the SMTP credential "Gmail SMTP".
+The app endpoints n8n uses: `/api/dialer/tick`, `/api/automation/events?since=…`, `/api/automation/report` (all need the key).
 
 ### About the free Twilio trial
 - It can only call **verified** numbers. Anyone can verify their own number on the **Leads** page: Twilio rings them, and they type the 6-digit code shown on screen.

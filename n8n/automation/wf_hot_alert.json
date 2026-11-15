@@ -1,0 +1,95 @@
+{
+  "id": "wowHotLeadAlert1",
+  "name": "WOW 2 · Hot-lead email alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Small helper: call the WOW app with the shared key.\nconst call = (path, qs = {}) => this.helpers.httpRequest({\n  method: 'GET', url: 'https://vaani-divyasree.vercel.app/api' + path, qs, json: true, timeout: 90000,\n  headers: { 'X-Dialer-Key': $env.DIALER_SECRET },\n});\n\n// Every minute: fetch calls that finished since the last run; pass on only the Hot ones (one email each).\nconst memory = $getWorkflowStaticData('global');\nconst since = memory.since || new Date(Date.now() - 15 * 60 * 1000).toISOString();\nconst res = await call('/automation/events', { since });\nconst calls = res.calls || [];\nif (calls.length) memory.since = calls[calls.length - 1].ended_at;   // next run starts after the newest one\nif (!$env.ALERT_EMAIL) return [];                                   // no address yet: nothing to send\nreturn (res.hot || []).map(c => ({ json: {\n  name: c.name || 'Lead', score: c.score, phone: c.phone || '', intent: c.intent || '-',\n  budget: c.budget_fit || '-', location: c.geography_fit || '-', timeline: c.timeline_fit || '-',\n  expert_call: c.callback_time || 'not booked yet', next: c.next_action || '-', summary: c.summary || '', link: c.link,\n}}));"
+      },
+      "name": "Get new Hot calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "get-new-hot-calls"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_FROM_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=🔥 Hot lead: {{ $json.name }} ({{ $json.score }}/100)",
+        "emailFormat": "text",
+        "text": "=Hot lead from Divya\n\nName: {{ $json.name }}\nPhone: {{ $json.phone }}\nScore: {{ $json.score }}/100\nIntent: {{ $json.intent }}\nLocation: {{ $json.location }}\nBudget: {{ $json.budget }}\nTimeline: {{ $json.timeline }}\nProperty Expert call: {{ $json.expert_call }}\nNext step: {{ $json.next }}\n\nSummary: {{ $json.summary }}\n\nOpen the call: {{ $json.link }}",
+        "options": {}
+      },
+      "name": "Email sales",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        520,
+        0
+      ],
+      "id": "email",
+      "credentials": {
+        "smtp": {
+          "id": "wowGmailSmtp0001",
+          "name": "Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Get new Hot calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get new Hot calls": {
+      "main": [
+        [
+          {
+            "node": "Email sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "tags": []
+}

@@ -467,6 +467,55 @@ async def lead_sources(http: httpx.AsyncClient = Depends(http_client)):
 
 
 # ── Automatic call-backs (busy leads) ────────────────────────────────────────
+def _automation_key_ok(given: str | None) -> bool:
+    """n8n and the GitHub scheduler send DIALER_SECRET; without it set, these endpoints stay closed (no data leak)."""
+    import os
+    secret = os.environ.get("DIALER_SECRET", "")
+    return bool(secret) and hmac.compare_digest(given or "", secret)
+
+
+@app.get("/api/automation/events")
+async def automation_events(since: str = Query(default="", max_length=40), x_dialer_key: str | None = Header(default=None),
+                            http: httpx.AsyncClient = Depends(http_client)):
+    """Calls that finished after `since` (ISO time), for n8n's Hot-lead alert. Newest last."""
+    if not _automation_key_ok(x_dialer_key):
+        raise HTTPException(401, "bad automation key")
+    try:
+        after = datetime.fromisoformat(since.replace("Z", "+00:00")) if since else datetime.now(timezone.utc) - timedelta(minutes=15)
+    except ValueError:
+        raise HTTPException(400, "since must be an ISO date-time") from None
+    rows = await Supabase(http).select("calls", {
+        "select": "vapi_call_id,id,lead_id,name,phone,ended_at,duration_sec,score,interest,summary,intent,geography_fit,"
+                  "budget_fit,timeline_fit,callback_time,next_action,objections",
+        "ended_at": f"gt.{after.isoformat()}", "summary": "not.is.null", "order": "ended_at.asc", "limit": "50"})
+    base = settings().public_base_url
+    for r in rows:
+        r["link"] = f"{base}/#/calls/{r.get('id') or r.get('vapi_call_id')}"
+    return {"since": after.isoformat(), "calls": rows, "hot": [r for r in rows if r.get("interest") == "hot"]}
+
+
+@app.get("/api/automation/report")
+async def automation_report(x_dialer_key: str | None = Header(default=None), http: httpx.AsyncClient = Depends(http_client)):
+    """Today's numbers (India time) for n8n's 7 pm email."""
+    if not _automation_key_ok(x_dialer_key):
+        raise HTTPException(401, "bad automation key")
+    from . import callbacks
+    ist = callbacks.IST
+    start = datetime.now(ist).replace(hour=0, minute=0, second=0, microsecond=0)
+    sb = Supabase(http)
+    calls = await sb.select("calls", {"select": "name,interest,score,callback_time,duration_sec,ended_reason",
+                                      "started_at": f"gte.{start.astimezone(timezone.utc).isoformat()}"})
+    leads_new = await sb.select("leads", {"select": "id", "created_at": f"gte.{start.astimezone(timezone.utc).isoformat()}"})
+    callbacks_due = await sb.select("leads", {"select": "name,next_call_at,status", "status": "eq.callback", "next_call_at": "not.is.null"})
+    tiers = {t: sum(1 for c in calls if c.get("interest") == t) for t in ("hot", "warm", "cold")}
+    booked = [{"name": c.get("name") or "Lead", "time": c["callback_time"]} for c in calls if c.get("callback_time")]
+    mins = round(sum(float(c.get("duration_sec") or 0) for c in calls) / 60, 1)
+    return {"date": start.strftime("%d %b %Y"), "calls": len(calls), "minutes": mins, **tiers, "expert_calls_booked": booked,
+            "new_leads": len(leads_new),
+            "call_backs_scheduled": [{"name": x.get("name"), "at": callbacks.fmt_ist(datetime.fromisoformat(x["next_call_at"].replace("Z", "+00:00")))}
+                                     for x in callbacks_due]}
+
+
 @app.api_route("/api/dialer/tick", methods=["GET", "POST"])
 async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key: str | None = Header(default=None),
                       http: httpx.AsyncClient = Depends(http_client)):
@@ -481,13 +530,23 @@ async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key
     if not callbacks.is_calling_hours(now):
         return {"dialled": [], "reason": "outside calling hours (9 am - 9 pm IST)"}
     sb = Supabase(http)
+    per_run = config_store.current()["speed_to_lead"]["per_run"]
     due = await sb.select("leads", {"select": "id,name,status,callback_tries", "status": "in.(callback,no_answer,new,re_engaged)",
-                                    "next_call_at": f"lte.{now.isoformat()}", "order": "next_call_at.asc",
-                                    "limit": str(config_store.current()["speed_to_lead"]["per_run"])})
+                                    "next_call_at": f"lte.{now.isoformat()}", "order": "next_call_at.asc", "limit": str(per_run)})
+    if len(due) < per_run and config_store.current()["speed_to_lead"]["enabled"]:
+        # New leads that were never scheduled or dialled (e.g. added before automatic calling): call them too,
+        # oldest first. A lead that can't be called gets a time far ahead, so it is never retried every minute.
+        fresh = await sb.select("leads", {"select": "id,name,status,callback_tries", "status": "eq.new",
+                                          "next_call_at": "is.null", "or": "(attempts.is.null,attempts.eq.0)",
+                                          "order": "created_at.asc", "limit": str(per_run - len(due))})
+        due += fresh
     done = []
     for lead in due:
         # Claim it first (clears the time) so two scheduler runs can never dial the same lead twice.
         is_callback = lead["status"] == "callback"   # else: a no-answer re-attempt
+        from . import cache
+        if not await cache.claim(http, f"dial:{lead['id']}", 120):   # another scheduler run (n8n / GitHub) has it
+            continue
         claim = {"next_call_at": None}
         if is_callback:
             claim["callback_tries"] = (lead.get("callback_tries") or 0) + 1
@@ -497,7 +556,11 @@ async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key
             done.append({"lead": lead.get("name"), "ok": True, "kind": "call-back" if is_callback else "re-attempt",
                          "call": res.get("id")})
         except phone.CallError as e:
-            await sb.update("leads", {"id": f"eq.{lead['id']}"}, {"callback_note": f"automatic call failed: {str(e)[:120]}"})
+            # Not callable now (e.g. not verified on the free Twilio trial): note why and park it for 30 days
+            # so the every-minute scheduler doesn't try it again and again. "Call now" still works any time.
+            parked = (now + timedelta(days=30)).isoformat()
+            await sb.update("leads", {"id": f"eq.{lead['id']}"}, {"callback_note": f"automatic call failed: {str(e)[:120]}",
+                                                                  "next_call_at": parked})
             done.append({"lead": lead.get("name"), "ok": False, "error": str(e)[:160]})
     return {"dialled": done, "checked_at": now.isoformat()}
 
