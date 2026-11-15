@@ -303,10 +303,13 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     if raw.get("instant"):
         n = sum(1 for m in messages if m["role"] == "user")
         if not await cache.claim(http, f"turn:{call_sid}:{n}"):
-            # The instant path already answered this turn and moved the call on: hand back its reply.
-            return await cache.get_text(http, f"next:{call_sid}:{n}") or twiml_gather(
-                "Sorry, could you say that once more?", row.get("lead_id") or lead_id, raw.get("lang", "en"),
-                raw.get("voice"), raw.get("stt"), True)
+            # The instant path is answering this same turn: wait (briefly) for its reply and hand back the same one.
+            for _ in range(30):
+                xml = await cache.get_text(http, f"next:{call_sid}:{n}")
+                if xml:
+                    return xml
+                await asyncio.sleep(0.1)
+            return twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), True)
     messages.append({"role": "user", "text": speech.strip()})
     out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
     t_replied = time.perf_counter()
@@ -532,6 +535,9 @@ async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: s
     if not row or not (row.get("raw") or {}).get("instant"):
         return "ignored"
     messages, raw = row.setdefault("messages", []), row.setdefault("raw", {})
+    il = raw.get("instant_last")
+    if il and time.time() - il.get("t", 0) < 15 and not await cache.get_text(http, f"fetched:{call_sid}:{il['n']}"):
+        return "taken"   # more copies of the same "yes" (Twilio repeats partials) before the reply has started
     n = sum(1 for m in messages if m["role"] == "user")
     if not await cache.claim(http, f"turn:{call_sid}:{n}"):
         return "taken"

@@ -577,7 +577,8 @@ async def phone_next(request: Request, n: int = 0, http: httpx.AsyncClient = Dep
     """Where an instantly-answered call is moved to: the reply prepared by /api/phone/partial."""
     from . import cache
     form = await twilio_form(request, live_call_ok=True)
-    xml = await cache.get_text(http, f"next:{form.get('CallSid', '')}:{n}")
+    sid = form.get("CallSid", "")
+    xml, _ = await asyncio.gather(cache.get_text(http, f"next:{sid}:{n}"), cache.put_text(http, f"fetched:{sid}:{n}", "1"))
     return _xml(xml or '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>')
 
 
