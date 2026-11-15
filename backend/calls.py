@@ -162,6 +162,7 @@ async def apply_lead_update(sb: Supabase, row: dict, groq: "Groq | None" = None)
     patch = {"status": "do_not_call" if row.get("do_not_call") else ("no_answer" if no_answer else "called"),
              "last_called_at": row.get("ended_at") or datetime.now(timezone.utc).isoformat()}
     if not no_answer:
+        patch["callback_note"] = None   # the lead was reached: clear old notes ("unreachable…", "not verified…")
         for k in ("interest", "callback_time", "next_action", "decision_maker"):
             if row.get(k):
                 patch[k] = row[k]
