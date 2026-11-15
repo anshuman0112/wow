@@ -9,6 +9,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import json
 import re
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
@@ -190,6 +191,145 @@ async def phone_verify_status(phone_number: str = Query(alias="phone", max_lengt
     return {"verified": await phone.is_verified(http, phone_number)}
 
 
+# ── Lead sources: website form, Facebook/Instagram, Google Ads, any webhook ──
+def _client_ip(request: Request) -> str:
+    return (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (request.client.host if request.client else "")
+
+
+class InboundLead(BaseModel):
+    name: str = Field(default="", max_length=120)
+    phone: str = Field(min_length=6, max_length=24)
+    email: str = Field(default="", max_length=200)
+    location: str = Field(default="", max_length=120)
+    budget: str = Field(default="", max_length=80)
+    notes: str = Field(default="", max_length=500)
+    source: str = Field(default="Website form", max_length=40)
+    website: str = Field(default="", max_length=200)   # honeypot: real people never fill this hidden field
+
+
+@app.post("/api/leads/inbound")
+async def leads_inbound(req: InboundLead, request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    """Website form, Google Forms, Typeform or any tool: a new lead arrives → saved → Divya calls within seconds."""
+    from . import intake
+    if req.website:   # bot filled the hidden field
+        return {"ok": True}
+    try:
+        res = await intake.intake(http, req.model_dump(exclude={"website", "source"}), intake.clean_source(req.source),
+                                  client_ip=_client_ip(request))
+    except intake.IntakeError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True, **res}
+
+
+@app.get("/api/leads/meta")
+async def meta_verify(request: Request):
+    """Meta checks the webhook once when you connect it: echo the challenge if the verify token matches."""
+    import os
+    q = request.query_params
+    token = os.environ.get("META_VERIFY_TOKEN", "")
+    if q.get("hub.mode") == "subscribe" and token and hmac.compare_digest(q.get("hub.verify_token", ""), token):
+        return Response(content=q.get("hub.challenge", ""), media_type="text/plain")
+    raise HTTPException(403, "verify token mismatch")
+
+
+@app.post("/api/leads/meta")
+async def meta_leads(request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    """Facebook + Instagram Lead Ads: Meta sends the lead id the instant a form is submitted."""
+    from . import intake
+    body = await request.body()
+    if not intake.meta_signature_ok(body, request.headers.get("x-hub-signature-256", "")):
+        raise HTTPException(401, "bad Meta signature")
+    payload = json.loads(body or b"{}")
+    done = []
+    for entry in payload.get("entry") or []:
+        for ch in entry.get("changes") or []:
+            if ch.get("field") != "leadgen":
+                continue
+            leadgen_id = str((ch.get("value") or {}).get("leadgen_id") or "")
+            try:
+                lead, source = await intake.meta_fetch_lead(http, leadgen_id)
+                done.append({"leadgen_id": leadgen_id, **(await intake.intake(http, lead, source))})
+            except intake.IntakeError as e:
+                print(f"[meta] lead {leadgen_id}: {e}", flush=True)
+                done.append({"leadgen_id": leadgen_id, "error": str(e)})
+    return {"received": len(done), "leads": done}
+
+
+@app.post("/api/leads/google")
+async def google_leads(request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    """Google Ads lead form webhook (protected by the key you paste into Google Ads)."""
+    from . import intake
+    body = await request.json()
+    if not intake.google_key_ok(body):
+        raise HTTPException(401, "bad google_key")
+    try:
+        res = await intake.intake(http, intake.map_google_fields(body),
+                                  "Google Ads (test)" if body.get("is_test") else "Google Ads")
+    except intake.IntakeError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True, **res}
+
+
+class TestLead(BaseModel):
+    phone: str = Field(default="+919000000999", max_length=24)
+    name: str = Field(default="Test Lead", max_length=80)
+
+
+@app.post("/api/leads/test/{source}")
+async def lead_source_test(source: str, req: TestLead, x_admin_pin: str | None = Header(default=None),
+                           http: httpx.AsyncClient = Depends(http_client)):
+    """Integrations page 'Send test lead': a sample lead in each source's REAL format, through the same mapping
+    and intake code the live connector uses. Admin PIN required."""
+    from . import intake
+    pin = _admin_pin()
+    if pin and not hmac.compare_digest((x_admin_pin or "").strip(), pin):
+        raise HTTPException(401, "Wrong admin PIN.")
+    if source == "meta":   # what Meta returns for a lead (field_data), as Facebook or Instagram
+        lead = intake.map_meta_fields([{"name": "full_name", "values": [req.name]}, {"name": "phone_number", "values": [req.phone]},
+                                       {"name": "city", "values": ["Bengaluru"]}, {"name": "what_is_your_budget?", "values": ["1-1.5 crore"]}])
+        label = "Facebook (test)"
+    elif source == "instagram":
+        lead = intake.map_meta_fields([{"name": "full_name", "values": [req.name]}, {"name": "phone_number", "values": [req.phone]},
+                                       {"name": "city", "values": ["Hyderabad"]}])
+        label = "Instagram (test)"
+    elif source == "google":   # Google Ads lead form webhook body
+        lead = intake.map_google_fields({"user_column_data": [{"column_id": "FULL_NAME", "string_value": req.name},
+                                                              {"column_id": "PHONE_NUMBER", "string_value": req.phone},
+                                                              {"column_id": "CITY", "string_value": "Pune"}]})
+        label = "Google Ads (test)"
+    elif source == "website":
+        lead, label = {"name": req.name, "phone": req.phone, "location": "Chennai", "budget": "90 lakh - 1.2 crore"}, "Website form (test)"
+    else:
+        raise HTTPException(404, "Unknown source")
+    try:
+        return {"ok": True, "source": label, "mapped": {k: v for k, v in lead.items() if v}, **(await intake.intake(http, lead, label))}
+    except intake.IntakeError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/leads/sources")
+async def lead_sources(http: httpx.AsyncClient = Depends(http_client)):
+    """Integrations page: which sources are connected, leads per source, last arrival, time to first call."""
+    from . import intake
+    rows = await Supabase(http).select("leads", {"select": "source,created_at,first_call_at"})
+    by: dict[str, dict] = {}
+    for r in rows:
+        b = by.setdefault(r.get("source") or "unknown", {"leads": 0, "last": None, "speeds": []})
+        b["leads"] += 1
+        b["last"] = max(filter(None, [b["last"], r.get("created_at")]), default=None)
+        if r.get("first_call_at") and r.get("created_at"):
+            secs = (datetime.fromisoformat(r["first_call_at"].replace("Z", "+00:00")) -
+                    datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))).total_seconds()
+            if 0 <= secs < 86400 * 3:
+                b["speeds"].append(secs)
+    out = [{"source": k, "leads": v["leads"], "last_lead_at": v["last"],
+            "avg_seconds_to_first_call": round(sum(v["speeds"]) / len(v["speeds"])) if v["speeds"] else None}
+           for k, v in sorted(by.items(), key=lambda kv: -kv[1]["leads"])]
+    return {"connected": intake.sources_status(), "by_source": out,
+            "endpoints": {"website": "/enquire.html", "webhook": "/api/leads/inbound",
+                          "meta": "/api/leads/meta", "google": "/api/leads/google"}}
+
+
 # ── Automatic call-backs (busy leads) ────────────────────────────────────────
 @app.api_route("/api/dialer/tick", methods=["GET", "POST"])
 async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key: str | None = Header(default=None),
@@ -205,7 +345,7 @@ async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key
     if not callbacks.is_calling_hours(now):
         return {"dialled": [], "reason": "outside calling hours (9 am - 9 pm IST)"}
     sb = Supabase(http)
-    due = await sb.select("leads", {"select": "id,name,status,callback_tries", "status": "in.(callback,no_answer)",
+    due = await sb.select("leads", {"select": "id,name,status,callback_tries", "status": "in.(callback,no_answer,new,re_engaged)",
                                     "next_call_at": f"lte.{now.isoformat()}", "order": "next_call_at.asc", "limit": "3"})
     done = []
     for lead in due:

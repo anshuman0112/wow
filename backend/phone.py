@@ -46,7 +46,10 @@ async def call_lead(http: httpx.AsyncClient, lead_id: str, callback: bool = Fals
         "status": "calling", "last_called_at": datetime.now(timezone.utc).isoformat()})
 
     async def dialled() -> None:
-        await sb.update("leads", {"id": f"eq.{lead_id}"}, {"attempts": (lead.get("attempts") or 0) + 1})
+        patch = {"attempts": (lead.get("attempts") or 0) + 1}
+        if not lead.get("attempts"):   # first real dial → "time to first call" (speed to lead)
+            patch["first_call_at"] = datetime.now(timezone.utc).isoformat()
+        await sb.update("leads", {"id": f"eq.{lead_id}"}, patch)
     from . import cache, voices
     lead["voice"] = await voices.selected(http)   # the voice chosen in the dashboard, read before dialling
     await cache.put_lead(http, lead)   # the call's first request reads it from Redis, not the database

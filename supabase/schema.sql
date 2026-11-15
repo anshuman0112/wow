@@ -50,6 +50,7 @@ create index if not exists leads_next_call_idx on leads (next_call_at) where nex
 alter table leads add column if not exists score int;                -- from the latest call
 alter table leads add column if not exists next_action text;
 alter table leads add column if not exists decision_maker text;
+alter table leads add column if not exists first_call_at timestamptz;   -- speed to lead: first real dial
 create index if not exists leads_status_idx on leads (status, attempts);
 
 -- 3. Calls: one row per finished call (written by n8n WF4)
@@ -100,7 +101,7 @@ create or replace view leads_public as
   select id, campaign_id, name,
          left(phone, 3) || ' xxxxx ' || right(phone, 3) as phone,
          location, budget, source, status, interest, attempts, last_called_at, callback_time, created_at,
-         re_engaged_at, next_call_at, callback_note, score, next_action, decision_maker
+         re_engaged_at, next_call_at, callback_note, score, next_action, decision_maker, first_call_at
   from leads;
 
 create or replace view calls_public as
