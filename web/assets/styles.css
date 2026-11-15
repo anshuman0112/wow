@@ -141,6 +141,8 @@ tr.clickable:hover td { background: var(--surface-2); }
 .list { display: flex; flex-direction: column; }
 .list-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); text-decoration: none; }
 .list-item:last-child { border-bottom: 0; }
+.list-item > * { min-width: 0; overflow: hidden; }   /* long one-line summaries shorten with "…" instead of widening the page on phones */
+.card { min-width: 0; }   /* a card inside a grid may shrink to the screen (otherwise its widest line sets the page width) */
 a.list-item:hover { background: var(--surface-2); }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-text); display: grid; place-items: center; font-weight: 650; font-size: 12.5px; flex: none; }
 

@@ -47,7 +47,7 @@ export default async function queueView(el) {
       ${demoBanner(mode())}
       <div class="page-head">
         <div><h1>Call queue</h1><p class="muted">Everyone who still needs a call. Call-backs and re-attempts are dialled automatically
-          (9 am – 9 pm IST); new and interested-again leads are called when you press <b>Call</b>.</p></div>
+          (9 am – 9 pm IST), and new leads are called automatically when they arrive. Press <b>Call now</b> to call someone straight away.</p></div>
       </div>
       <section class="card">
         <div class="toolbar">

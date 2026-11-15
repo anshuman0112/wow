@@ -18,18 +18,35 @@ async function sb() {
 
 export const mode = () => (isLive.supabase() ? 'live' : 'demo');
 
+// One page shows leads and calls in several places: share one request instead of fetching the same list
+// 3-5 times (each a round trip to the server). Kept for a few seconds; any change clears it.
+const shared = new Map();
+const SHARE_MS = 8000;
+function once(key, load) {
+  const hit = shared.get(key);
+  if (hit && Date.now() - hit.at < SHARE_MS) return hit.p;
+  const p = load().catch(e => { shared.delete(key); throw e; });
+  shared.set(key, { p, at: Date.now() });
+  return p;
+}
+export const refreshData = () => shared.clear();
+
 export async function getLeads() {
   if (mode() === 'demo') return mem.leads;
-  const r = await fetch(`${config.apiBaseUrl}/data/leads`);   // signed-in API (the database is private)
-  if (!r.ok) throw new Error(`Could not load leads (${r.status})`);
-  return await r.json();
+  return once('leads', async () => {
+    const r = await fetch(`${config.apiBaseUrl}/data/leads`);   // signed-in API (the database is private)
+    if (!r.ok) throw new Error(`Could not load leads (${r.status})`);
+    return await r.json();
+  });
 }
 
 export async function getCalls() {
   if (mode() === 'demo') return mem.calls;
-  const r = await fetch(`${config.apiBaseUrl}/data/calls`);   // signed-in API (the database is private)
-  if (!r.ok) throw new Error(`Could not load calls (${r.status})`);
-  return (await r.json()).map(normaliseCall);
+  return once('calls', async () => {
+    const r = await fetch(`${config.apiBaseUrl}/data/calls`);   // signed-in API (the database is private)
+    if (!r.ok) throw new Error(`Could not load calls (${r.status})`);
+    return (await r.json()).map(normaliseCall);
+  });
 }
 
 export async function getCall(id) {
@@ -38,6 +55,7 @@ export async function getCall(id) {
 }
 
 export async function addLeads(rows) {
+  refreshData();
   if (mode() === 'demo') {
     const existing = new Set(mem.leads.map(l => l.phone.replace(/\D/g, '')));
     let n = 0;
@@ -59,6 +77,7 @@ export async function addLeads(rows) {
 
 // Ask the Python API to ring one lead's real phone (Twilio bridge or Vapi number).
 export async function callNow(leadId) {
+  refreshData();
   if (mode() === 'demo') throw new Error('Demo mode: connect Supabase to make real calls.');
   const res = await fetch(`${config.apiBaseUrl}/calls/now`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

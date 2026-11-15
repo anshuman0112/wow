@@ -1,6 +1,6 @@
 import { signedIn, renderSignIn, signOut, session } from './auth.js';   // first: adds the session to API calls
 import { icon } from './ui.js';
-import { mode } from './store.js';
+import { mode, refreshData } from './store.js';
 import overview from './views/overview.js';
 import talk from './views/talk.js';
 import voicesView from './views/voices.js';
@@ -37,9 +37,12 @@ function renderNav(active) {
     .map(r => `<a href="#/${r.path}" class="${r.path === active ? 'active' : ''}">${r.label}</a>`).join('');
 }
 
+let lastPath = '';
 async function router() {
   const [path, ...rest] = (location.hash.replace(/^#\/?/, '') || 'overview').split('/');
   const route = routes.find(r => r.path === path) || routes[0];
+  if (!(path === 'calls' && lastPath === 'calls')) refreshData();   // fresh data per page (opening a call reuses the list)
+  lastPath = path;
   renderNav(route.path);
   if (typeof cleanup === 'function') { try { cleanup(); } catch {} }
   cleanup = null;
