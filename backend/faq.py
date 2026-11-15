@@ -316,6 +316,29 @@ def _complete_slot(slot: str, said: str) -> str:
     return re.sub(r"^(Tomorrow|Today)\b", lambda x: x.group(1).lower(), slot)
 
 
+_CLOCK = re.compile(r"\b\d{1,2}([:.]\d{2})?\s*(am|pm|a\.m\.|p\.m\.|baje|o'?clock)\b|\b(morning|afternoon|evening|night|noon|subah|dopahar|shaam|raat)\b", re.I)
+_TIME_FOLLOWUP = re.compile(r"^Sure, (.+?)\. What time would suit you", re.I)
+_TIME_FOLLOWUP_HI = re.compile(r"^Theek hai, (.+?)\. Kis time", re.I)
+
+
+def time_followup(messages: list[dict], lang: str) -> str | None:
+    """The lead named a DAY for the expert call but no time ("Tomorrow at around…" — the phone cut the rest):
+    ask for the time once instead of confirming without it."""
+    last = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
+    if re.search(r"call (me )?back|busy|meeting|abhi nahi|not now|later", last.lower()) or _CLOCK.search(last):
+        return None
+    m = SLOT.search(last)
+    prev = next((x["text"] for x in reversed(messages[:-1]) if x["role"] == "assistant"), "")
+    if not m or not ("expert" in prev.lower() and re.search(r"day|time|kab|din", prev.lower())):
+        return None
+    if _TIME_FOLLOWUP.search(prev) or _TIME_FOLLOWUP_HI.search(prev):
+        return None   # already asked once: confirm the day as it is
+    day = re.sub(r"\s+", " ", m.group(2)).strip().lower()
+    day = day.capitalize() if day not in ("tomorrow", "today", "kal", "parso") else day
+    return (f"Sure, {day}. What time would suit you for the call?" if lang == "en"
+            else f"Theek hai, {day}. Kis time par call theek rahegi?")
+
+
 def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     """The lead gave a day/time for the Property Expert call → confirm exactly what they said and close politely.
     Not for "call me back later" requests (that's the busy flow)."""
@@ -323,10 +346,16 @@ def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     low = last.lower()
     if re.search(r"call (me )?back|busy|meeting|abhi nahi|not now|later", low):
         return None
+    prev_raw = next((x["text"] for x in reversed(messages[:-1]) if x["role"] == "assistant"), "")
+    follow = _TIME_FOLLOWUP.search(prev_raw) or _TIME_FOLLOWUP_HI.search(prev_raw)
+    if follow and not SLOT.search(last) and "?" not in last:
+        # Answer to "Sure, tomorrow. What time would suit you?": "4 pm" -> day + time; "any time" -> the day as given.
+        last = f"{follow.group(1)} at {last.strip()}" if re.match(r"\s*\d", last) else             (f"{follow.group(1)} {last}" if _CLOCK.search(last) else follow.group(1))
+        low = last.lower() + " expert"
     m = SLOT.search(last)
     if not m:
         return None
-    prev = next((x["text"].lower() for x in reversed(messages[:-1]) if x["role"] == "assistant"), "")
+    prev = prev_raw.lower()
     asked_slot = re.search(r"(day|time|kab|kaunsa din|when)", prev) and "expert" in prev
     has_time = bool(m.group(3) or m.group(5) or m.group(9))   # a day AND a time = an appointment
     if not ("expert" in low or asked_slot or has_time):

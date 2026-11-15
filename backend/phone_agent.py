@@ -478,6 +478,10 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
     speech = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
     intents = faq.detect(speech)
     t0 = time.perf_counter()
+    ask_time = faq.time_followup(messages, lang)
+    if ask_time:   # a day without a time: ask for the time before confirming the expert call
+        return {"reply": ask_time, "end": False, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "rule:ask-time", "prompt_tokens": 0, "completion_tokens": 0}}
     slot = faq.slot_confirmation(messages, lang)
     if slot:   # the lead chose the Property Expert time: confirm it back exactly and close politely
         return {"reply": slot, "end": True, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
@@ -714,9 +718,19 @@ def rule_analysis(messages: list[dict]) -> dict:
         slot = (noted.group(1) or noted.group(2) or "").strip()
     not_interested = objects(r"not interested|don'?t call|no thanks")
     answered = sum(1 for v in (geo, budget, timeline) if v.startswith("Yes")) + (intent != "unknown")
+    names = {"price": "price", "rate": "rate per sq ft", "size": "plot sizes", "amenities": "amenities", "schools": "schools",
+             "hospitals": "hospitals", "location": "location and distances", "possession": "possession date",
+             "rera": "RERA approval", "payment": "EMI and loans"}
+    asked = []
+    for m in messages:
+        if m["role"] == "user":
+            for k in faq.detect(m["text"]):
+                if names.get(k) and names[k] not in asked:
+                    asked.append(names[k])
     summary = (f"The lead answered {answered} of 4 checkpoints (intent: {intent}; location: {geo.split(' - ')[0].lower()}; "
                f"budget: {budget.split(' - ')[0].lower()}; timeline: {timeline.split(' - ')[0].lower()})"
                + (f" and booked a Property Expert call for {slot}." if slot else ".")
+               + (f" They asked about {', '.join(asked)}." if asked else "")
                + (" They said they are not interested." if not_interested else ""))
     return {"summary": summary, "intent": intent, "geography_fit": geo, "budget_fit": budget, "timeline_fit": timeline,
             "decision_maker": decider, "callback_time": slot or None, "do_not_call": objects(r"don'?t call"),
