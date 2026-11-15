@@ -79,9 +79,11 @@ async def after_call(http: httpx.AsyncClient, call_key: str) -> str | None:
     if not call:
         return None
     try:
+        # Google Apps Script answers with a redirect after running doPost: follow it, and count it as delivered.
         r = await http.post(url, json={"event": "call.completed", "lead": profile(call, lead)},
-                            timeout=httpx.Timeout(8.0, connect=4.0))
-        status = f"sent ({r.status_code})" if r.is_success else f"failed ({r.status_code})"
+                            timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=True)
+        ok = r.is_success or r.is_redirect
+        status = f"sent ({r.status_code})" if ok else f"failed ({r.status_code})"
     except httpx.HTTPError as e:
         status = f"failed ({type(e).__name__})"
     await sb.update("calls", {"vapi_call_id": f"eq.{call.get('vapi_call_id')}"}, {"crm_status": status})
