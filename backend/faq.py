@@ -24,7 +24,11 @@ INTENTS: dict[str, str] = {
     "schools": r"\b(schools?|colleges?|education|university)\b",
     "hospitals": r"\b(hospitals?|clinics?|medical|healthcare|doctors?)\b",
     "location": r"\b(where|location|located|kahan|address|airport|distance|how far|kitni door|connectivity)\b",
-    "possession": r"\b(possession|handover\w*|handing over|hand over|ready to move|completion|kab tak|delivery date)\b",
+    # Possession, as people really ask it on calls ("position" = how phone recognition often hears "possession").
+    "possession": r"\b(possession|position|handover\w*|handing over|hand(ed)? over|ready to move|completion|kab tak|"
+                  r"delivery date|deliver\w*|(possession|position|station|project|delivery|handover) timeline|"
+                  r"(when|by when|how soon).{0,40}\b(ready|done|complete\w*|finish\w*|deliver\w*|hand\w*|get (the )?(house|plot|home|keys))|"
+                  r"move in|keys)\b",
     "rera": r"\b(rera|approvals?|legal|registered|registration)\b",
     "payment": r"\b(emi|loan|loans|payment plan|installments?|discount|discounts|offer|offers)\b",
 }
@@ -42,8 +46,26 @@ SIZE_WORDS = r"\b(size|sizes|acre|acres|how big|plots?)\b"
 
 
 def detect(utterance: str) -> list[str]:
-    """Return FAQ intents if this turn is purely a property question, else []."""
-    u = utterance.lower()
+    """Return FAQ intents if this turn is a property question, else [].
+    "Yes, that works. Can you tell me when the possession is?" -> the question part is answered too."""
+    found = _detect(utterance)
+    if found:
+        return found
+    # A yes/no or a statement followed by a question: look at each sentence on its own.
+    parts = [x for x in re.split(r"(?<=[.?!])\s+|,\s*(?=(?:no one |)(?:can|could|please|when|what|how|where|tell)\b)",
+                                 utterance, flags=re.I) if x and x.strip()]
+    for part in reversed(parts if len(parts) > 1 else []):
+        found = _detect(part)
+        if found:
+            return found
+    return []
+
+
+def _detect(utterance: str) -> list[str]:
+    u = utterance.lower().strip()
+    # A question that merely starts with "No," / "Yes," / "No one," is still a question: drop that lead-in.
+    if re.search(QUESTION, u):
+        u = re.sub(r"^((yes|no|no one|okay|ok|haan|nahi|so|and|actually|like)\b[\s,.]*)+", "", u)
     # "What is the budget / price range / kitna hai?" is always a price question, even with stray words like "lakh".
     if re.search(r"\b(what('s| is)|tell me|kya hai|kitna|kitne|how much)\b.{0,25}\b(budget|price|range|cost|rate)\b", u) \
             and not re.search(r"\b(my|mera|meri|i have|hamara)\b.{0,15}\bbudget\b", u):
@@ -55,7 +77,7 @@ def detect(utterance: str) -> list[str]:
     # A short noun phrase about a topic ("the EMI plan and the loan", "handover of the project") is a question too.
     topic_only = len(u.split()) <= 8 and any(re.search(INTENTS[k], u) for k in ("payment", "possession", "amenities",
                                                                                    "schools", "hospitals", "rera"))
-    if (not re.search(QUESTION, u) and not topic_only) or re.search(STATEMENT, u) or len(u.split()) > 22:
+    if (not re.search(QUESTION, u) and not topic_only) or re.search(STATEMENT, u) or len(u.split()) > 30:
         return []
     if re.search(r"\b(exact|exactly|corner|specific|which plot|negotiat)", u):
         return []   # needs a careful "the expert will confirm" answer from the LLM, not a general fact
