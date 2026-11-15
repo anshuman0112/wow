@@ -431,6 +431,8 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
         nxt = faq.next_question(messages, lang)
         if "price" in intents and "lakh" in nxt.lower():   # price just answered: don't repeat it in the budget question
             nxt = "Would that range work for you?" if lang == "en" else "Kya yeh range aapke liye theek hai?"
+        if "possession" in intents and "2029" in nxt:      # possession just answered: don't repeat it in the timeline question
+            nxt = "Is that timeline comfortable for you?" if lang == "en" else "Kya yeh timeline aapke liye theek hai?"
         reply = f"{faq.answer(intents, lang, cached)} {nxt}"
         return {"reply": reply, "end": False, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
                 "_usage": {"model": "faq-cache" + ("+redis" if cache.fast_enough() else ""), "prompt_tokens": 0,
@@ -540,10 +542,15 @@ def _norm_words(text: str | None) -> list[str]:
 
 
 async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: str) -> str:
-    """Twilio's live words while the lead speaks. A plain "yes" is answered NOW: the reply is prepared,
-    then the call is moved to it (Twilio REST), skipping the silence wait at the end of speech."""
+    """Twilio's live words while the lead speaks (sent about once a second).
+
+    The lead has STOPPED talking when Twilio sends the SAME words twice in a row: it keeps repeating its
+    transcript while it waits for its own silence timer (seen on real calls: "Home." repeated 4 times over
+    3 seconds before Twilio's final result). At that moment we answer and move the call to the reply,
+    skipping the rest of Twilio's wait. A first word on its own is never answered ("Yeah…" may go on to
+    "…yes, it is a good time"), and an unfinished sentence ("Hi, can you…") is left to the normal path."""
     words = _norm_words(heard)
-    if not words or len(words) > 6 or not INSTANT.match(" ".join(words)):
+    if not words or len(words) > 40:
         return "ignored"
     sb, groq = Supabase(http), Groq(http)
     row, _ = await asyncio.gather(load_session(http, sb, call_sid), cache.get_quota(http))
@@ -554,10 +561,18 @@ async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: s
     if il and time.time() - il.get("t", 0) < 15 and not await cache.get_text(http, f"fetched:{call_sid}:{il['n']}"):
         return "taken"   # more copies of the same "yes" (Twilio repeats partials) before the reply has started
     n = sum(1 for m in messages if m["role"] == "user")
+    said = " ".join(words)
+    key = f"heard:{call_sid}:{n}"
+    before = await cache.get_text(http, key)
+    if before != said:   # still talking (or first copy): remember and wait for the next update
+        await cache.put_text(http, key, said, 120)
+        return "listening"
+    if looks_unfinished(heard):
+        return "unfinished"
     if not await cache.claim(http, f"turn:{call_sid}:{n}"):
         return "taken"
     t0 = time.perf_counter()
-    messages.append({"role": "user", "text": " ".join(words).capitalize() + "."})
+    messages.append({"role": "user", "text": (heard or "").strip() or said.capitalize() + "."})
     raw["instant_last"] = {"n": n, "words": " ".join(words), "t": time.time()}
     out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
     reply = (out.get("reply") or "Sorry, could you say that once more?").strip()[:600]

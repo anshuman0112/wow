@@ -68,54 +68,60 @@ async def main() -> None:
         check(st == 200 and valid(x) and "partialResultCallback" in x and 'speechModel="deepgram_nova-3"' in x
               and 'bargeIn="false"' in x, "call starts: Nova-3, instant mode, no barge-in", f"{srv} {says(x)[:70]}")
 
-        # Twilio's live words while the lead says "yes" (partials have no AccountSid and are not signed for our URL)
+        # Twilio's live words while the lead talks (repeated about once a second until Twilio's own timer ends)
         async def partial(text: str) -> str:
             r = await c.post(BASE + "/api/phone/partial?lead=", data={"CallSid": SID, "UnstableSpeechResult": text})
             return f"{r.status_code} {r.text}"
-        p1 = await partial("Ye")
-        check(p1.startswith("200") and "ignored" in p1, "half word 'Ye' is ignored", p1)
+
+        def fired(r: str) -> bool:
+            return "answered" in r or "redirect-failed" in r
+
+        async def started(n: int) -> str:   # Twilio fetches the instant reply (the call has moved)
+            st, x, ms, srv = await post(f"/api/phone/next?n={n}", {})
+            return says(x)
+
+        # 1. From the real call: "Yeah…" then "…yes, it is a good time" must NOT be answered at "Yeah".
+        r1 = await partial("Yeah")
+        r2 = await partial("Yeah. Yes, it is a good time")
+        check(not fired(r1) and not fired(r2), "never answers while the lead is still talking ('Yeah' -> 'Yeah, yes it is a good time')",
+              f"{r1} / {r2}")
         t0 = time.perf_counter()
-        p2 = await partial("Yes")
-        instant_ms = (time.perf_counter() - t0) * 1000
-        check(p2.startswith("200") and ("answered" in p2 or "redirect-failed" in p2), "'Yes' answered instantly",
-              f"{p2} in {instant_ms:.0f} ms (moving a FAKE call fails at Twilio: expected)")
-        p3 = await partial("Yes.")
-        check("taken" in p3 or "ignored" in p3, "repeat 'Yes.' partial is not answered again", p3)
-        st, x, ms, srv = await post("/api/phone/next?n=0", {})
-        first_reply = says(x)
-        check(st == 200 and valid(x) and "<Say" in x, "Twilio fetches the instant reply", first_reply[:90])
-        st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "Yes.", "Confidence": "0.9"})
-        check(st == 200 and says(x) == first_reply, "Twilio's normal 'Yes.' result gets the SAME reply (no double answer)",
-              says(x)[:60])
+        r3 = await partial("Yeah. Yes, it is a good time.")
+        ms3 = (time.perf_counter() - t0) * 1000
+        check(fired(r3), "same words repeated (lead stopped) -> answered at once", f"{r3} in {ms3:.0f} ms (fake call: Twilio move fails, expected)")
+        r4 = await partial("Yeah. Yes, it is a good time.")
+        check("taken" in r4, "more repeats of the same words are not answered again", r4)
+        first = await started(0)
+        check("<" not in first and first != "(hang up)", "Twilio fetches the instant reply", first[:90])
+        st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "Yeah. Yes, it is a good time."})
+        check(says(x) == first, "Twilio's own final result gets the SAME reply (no double answer)", says(x)[:60])
 
-        st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "I'm looking at it as a weekend home."})
-        check(st == 200 and valid(x) and "<Say" in x, "normal long answer", f"{srv} {says(x)[:90]}")
-        p = await partial("I'm looking at it as a weekend")
-        check("ignored" in p, "a long sentence is never cut short by the instant path", p)
+        # 2. A full question, answered as soon as it repeats (from the real call: the cost question).
+        await partial("Can you please")
+        await partial("Can you please tell me what is the cost")
+        r = await partial("Can you please tell me what is the cost?")
+        check(fired(r), "question answered as soon as the lead stops", r)
+        x = await started(1)
+        check("ninety-two point four lakh" in x, "...with the right answer (price)", x[:90])
 
+        # 3. Unfinished sentence repeated (lead paused mid-sentence) is NOT answered early.
+        await partial("Hi. Can you")
+        r = await partial("Hi. Can you")
+        check(not fired(r), "unfinished sentence ('Hi. Can you') is never answered early", r)
+
+        # 4. Normal path still works when no early answer happens.
+        st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "Hi. Can you tell me about the EMI and loan?"})
+        check(st == 200 and "EMI" in x, "normal path (no early answer): EMI question", f"{srv} {says(x)[:90]}")
         st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "Before going, can you please tell me when you"})
         check(st == 200 and "<Say" not in x and "<Gather" in x, "cut off mid-sentence -> keeps listening silently", says(x))
         st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "will hand over the project?"})
         check(st == 200 and "December 2029" in x, "...rest of the sentence is joined and answered", f"{srv} {says(x)[:90]}")
 
-        st, x, ms, srv = await post("/api/phone/turn?lead=", {"SpeechResult": "The EMI plan and the loan"})
-        check(st == 200 and "EMI" in x and "upfront" in x, "EMI question answered properly", f"{srv} {says(x)[:100]}")
-
-        # Race: the instant "okay" and Twilio's normal "Okay." arrive at the same moment.
-        r1, r2 = await asyncio.gather(partial("okay"), post("/api/phone/turn?lead=", {"SpeechResult": "Okay."}))
-        check(r2[0] == 200 and valid(r2[1]) and "once more" not in r2[1], "race: instant + normal 'okay' together -> one clean reply",
+        # 5. Race: early answer and Twilio's final result arrive together -> one clean reply.
+        await partial("It is for investment")
+        r1, r2 = await asyncio.gather(partial("It is for investment."), post("/api/phone/turn?lead=", {"SpeechResult": "It is for investment."}))
+        check(r2[0] == 200 and valid(r2[1]) and "once more" not in r2[1], "race: early + final together -> one clean reply",
               f"partial={r1} | turn says: {says(r2[1])[:70]}")
-
-        # More instant answers (each is a complete answer, so no silence wait), and phrases that must NOT be instant.
-        for text, should in [("I'm busy right now", True), ("it's for investment", True), ("no", False),
-                             ("no but tell me the price", False), ("yes but what is the", False)]:
-            r = await partial(text)
-            fired = ("answered" in r or "redirect-failed" in r or "taken" in r)
-            check(fired == should, f"instant for {text!r}: {'yes' if should else 'no'}", r)
-            if fired:   # let the instant reply 'start' (Twilio fetches it) before the next phrase
-                async with httpx.AsyncClient(timeout=30) as h:
-                    il = ((await cache.get_session(h, SID)) or {}).get("raw", {}).get("instant_last") or {}
-                await post(f"/api/phone/next?n={il.get('n', 0)}", {})
 
         st, x, ms, srv = await post("/api/phone/turn?lead=&silence=1", {})
         check(st == 200 and "still there" in x, "silence -> 'Are you still there?'", says(x))
