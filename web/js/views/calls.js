@@ -1,22 +1,68 @@
 import { getCalls, getCall, mode } from '../store.js';
 import { esc, icon, fmtDur, fmtDate, interestBadge, moodBadge, demoBanner } from '../ui.js';
 
+// Kept between visits, so opening a call and coming back keeps your dates, filter and sort.
+const view = { filter: 'all', from: '', to: '', sort: 'new', preset: 'all' };
+
+// Calendar day of a call in India time (YYYY-MM-DD), so "today" means today in IST.
+const istDay = iso => iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '';
+const shift = (day, n) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const PRESETS = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', 'Last 7 days'], ['month', 'This month'], ['all', 'All time']];
+
+function presetRange(p) {
+  const today = istDay(new Date().toISOString());
+  return { today: [today, today], yesterday: [shift(today, -1), shift(today, -1)], '7d': [shift(today, -6), today],
+           month: [`${today.slice(0, 8)}01`, today], all: ['', ''] }[p];
+}
+
+const fmtDay = d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
 export default async function callsView(el, [openId]) {
   const calls = await getCalls();
-  let filter = 'all';
 
   const draw = () => {
-    const shown = calls.filter(c => filter === 'all' || c.interest === filter);
+    const inRange = calls.filter(c => {
+      const d = istDay(c.started_at);
+      return (!view.from || d >= view.from) && (!view.to || d <= view.to);
+    });
+    const count = k => k === 'all' ? inRange.length : inRange.filter(c => c.interest === k).length;
+    const shown = inRange.filter(c => view.filter === 'all' || c.interest === view.filter)
+      .sort((a, b) => (view.sort === 'new' ? -1 : 1) * String(a.started_at || '').localeCompare(String(b.started_at || '')));
+    const rangeLabel = !view.from && !view.to ? 'all time'
+      : view.from === view.to ? fmtDay(view.from) : `${view.from ? fmtDay(view.from) : 'the start'} – ${view.to ? fmtDay(view.to) : 'today'}`;
+    const tile = (k, label, cls) => `
+      <button class="card card-pad stat" data-f="${k}" style="text-align:left;cursor:pointer;font:inherit;color:inherit;${view.filter === k ? 'outline:2px solid var(--brand, #8a6d3b)' : ''}">
+        <div class="label">${label}</div><div class="value">${count(k)}</div>
+        <div class="hint">${k === 'all' ? rangeLabel : `${Math.round((count(k) / Math.max(1, count('all'))) * 100)}% of calls`}${cls ? '' : ''}</div>
+      </button>`;
     el.innerHTML = `
       ${demoBanner(mode())}
       <div class="page-head">
-        <div><h1>Calls</h1><p class="muted">Every call is recorded, transcribed, summarised and scored</p></div>
+        <div><h1>Calls</h1><p class="muted">Every call is transcribed, summarised and scored · browser calls are also recorded</p></div>
+      </div>
+      <section class="card card-pad" style="margin-bottom:16px">
+        <div class="row" style="gap:12px">
+          <div class="seg" role="group" aria-label="Quick date range">
+            ${PRESETS.map(([k, v]) => `<button data-p="${k}" class="${view.preset === k ? 'on' : ''}">${v}</button>`).join('')}
+          </div>
+          <label class="small muted row" style="gap:6px">From <input class="input" type="date" id="from" value="${esc(view.from)}"></label>
+          <label class="small muted row" style="gap:6px">To <input class="input" type="date" id="to" value="${esc(view.to)}"></label>
+          <span class="spacer"></span>
+          <label class="small muted row" style="gap:6px">Sort
+            <select class="input" id="sort">
+              <option value="new" ${view.sort === 'new' ? 'selected' : ''}>Newest first</option>
+              <option value="old" ${view.sort === 'old' ? 'selected' : ''}>Oldest first</option>
+            </select></label>
+        </div>
+      </section>
+      <div class="grid g-4" style="margin-bottom:16px">
+        ${tile('all', 'Total calls')}${tile('hot', '🔥 Hot')}${tile('warm', 'Warm')}${tile('cold', 'Cold')}
       </div>
       <section class="card">
         <div class="toolbar">
-          <div class="seg" role="group" aria-label="Filter calls">
-            ${[['all', 'All'], ['hot', 'Hot'], ['warm', 'Warm'], ['cold', 'Cold']].map(([k, v]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${v}</button>`).join('')}
-          </div>
+          <b>${view.filter === 'all' ? 'All calls' : `${view.filter[0].toUpperCase()}${view.filter.slice(1)} calls`}</b>
+          <span class="muted small">${shown.length} shown · ${rangeLabel}</span>
+          ${view.filter !== 'all' || view.from || view.to ? '<span class="spacer"></span><button class="btn btn-ghost small" id="reset">Show everything</button>' : ''}
         </div>
         <div class="table-wrap">
           <table>
@@ -31,12 +77,25 @@ export default async function callsView(el, [openId]) {
                   <td>${moodBadge(c.sentiment_end)}</td>
                   <td>${interestBadge(c.interest)}</td>
                   <td>${esc(c.callback_time || '—')}</td>
-                </tr>`).join('') || '<tr><td colspan="7" class="empty">No calls yet.</td></tr>'}
+                </tr>`).join('') || `<tr><td colspan="7" class="empty">${calls.length ? 'No calls match these dates and filter.' : 'No calls yet.'}</td></tr>`}
             </tbody>
           </table>
         </div>
       </section>`;
-    el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
+    el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { view.filter = view.filter === b.dataset.f ? 'all' : b.dataset.f; draw(); });
+    el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+      [view.from, view.to] = presetRange(b.dataset.p); view.preset = b.dataset.p; draw();
+    });
+    const setDate = (key, value) => {
+      view[key] = value; view.preset = '';
+      if (view.from && view.to && view.from > view.to) [view.from, view.to] = [view.to, view.from];   // swap if reversed
+      draw();
+    };
+    el.querySelector('#from').onchange = e => setDate('from', e.target.value);
+    el.querySelector('#to').onchange = e => setDate('to', e.target.value);
+    el.querySelector('#sort').onchange = e => { view.sort = e.target.value; draw(); };
+    const reset = el.querySelector('#reset');
+    if (reset) reset.onclick = () => { Object.assign(view, { filter: 'all', from: '', to: '', preset: 'all' }); draw(); };
     el.querySelectorAll('tr[data-id]').forEach(tr => {
       const open = () => { location.hash = `#/calls/${tr.dataset.id}`; };
       tr.onclick = open;
