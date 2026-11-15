@@ -61,8 +61,36 @@ def detect(utterance: str) -> list[str]:
     return []
 
 
+# Topic words the phone's speech recognition often gets slightly wrong ("posession", "amenties", "hospitel").
+# Each word of the lead's sentence that is a close spelling match is corrected before the topic is detected.
+TOPIC_WORDS = ["possession", "amenities", "amenity", "clubhouse", "hospital", "hospitals", "school", "schools",
+               "college", "price", "pricing", "budget", "loan", "loans", "installment", "installments", "location",
+               "located", "airport", "distance", "rera", "registered", "approval", "approvals", "handover",
+               "delivery", "deliver", "completion", "facilities", "facility", "swimming", "gym", "size", "sizes"]
+SPOKEN_FIXES = {"position": "possession", "posession": "possession", "possesion": "possession", "station": "possession",
+                "pro session": "possession", "e m i": "emi", "emis": "emi", "a menities": "amenities",
+                "amenties": "amenities", "club house": "clubhouse", "rara": "rera", "rera's": "rera"}
+
+
+def correct_words(text: str) -> str:
+    """Fix common speech-recognition slips so the question is still understood (no AI needed)."""
+    import difflib
+    t = " " + text.lower() + " "
+    for wrong, right in SPOKEN_FIXES.items():
+        t = re.sub(rf"\b{re.escape(wrong)}\b", right, t)
+    out = []
+    for w in t.split():
+        core = re.sub(r"[^a-z']", "", w)
+        if len(core) >= 5 and core not in TOPIC_WORDS:
+            near = difflib.get_close_matches(core, TOPIC_WORDS, n=1, cutoff=0.84)
+            if near:
+                w = w.replace(core, near[0])
+        out.append(w)
+    return " ".join(out)
+
+
 def _detect(utterance: str) -> list[str]:
-    u = utterance.lower().strip()
+    u = correct_words(utterance).strip()
     # A question that merely starts with "No," / "Yes," / "No one," is still a question: drop that lead-in.
     if re.search(QUESTION, u):
         u = re.sub(r"^((yes|no|no one|okay|ok|haan|nahi|so|and|actually|like)\b[\s,.]*)+", "", u)
@@ -76,7 +104,8 @@ def _detect(utterance: str) -> list[str]:
             + (["rate"] if re.search(INTENTS["rate"], u) else [])
     # A short noun phrase about a topic ("the EMI plan and the loan", "handover of the project") is a question too.
     topic_only = len(u.split()) <= 8 and any(re.search(INTENTS[k], u) for k in ("payment", "possession", "amenities",
-                                                                                   "schools", "hospitals", "rera"))
+                                                                                   "schools", "hospitals", "rera")) \
+        and not re.search(r"\b(i|i'm|im|i am|my|we|we're|our|mera|main)\b", u)   # "I'm a doctor…" is about the lead, not a question
     if (not re.search(QUESTION, u) and not topic_only) or re.search(STATEMENT, u) or len(u.split()) > 30:
         return []
     if re.search(r"\b(exact|exactly|corner|specific|which plot|negotiat)", u):

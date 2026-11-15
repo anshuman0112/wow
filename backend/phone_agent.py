@@ -474,7 +474,10 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
             nxt = "Would that range work for you?" if lang == "en" else "Kya yeh range aapke liye theek hai?"
         if "possession" in intents and "2029" in nxt:      # possession just answered: don't repeat it in the timeline question
             nxt = "Is that timeline comfortable for you?" if lang == "en" else "Kya yeh timeline aapke liye theek hai?"
-        reply = f"{faq.answer(intents, lang, cached)} {nxt}"
+        # A natural acknowledgement before the facts, rotated so it never sounds repetitive.
+        opener = (["Sure.", "Of course.", "Good question.", "Absolutely."] if lang == "en"
+                  else ["Zaroor.", "Bilkul.", "Achha sawaal hai."])[len(messages) // 2 % (4 if lang == "en" else 3)]
+        reply = f"{opener} {faq.answer(intents, lang, cached)} {nxt}"
         return {"reply": reply, "end": False, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
                 "_usage": {"model": "faq-cache" + ("+redis" if cache.fast_enough() else ""), "prompt_tokens": 0,
                            "completion_tokens": 0, "intents": intents, "redis_hits": len(cached)}}
