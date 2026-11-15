@@ -503,7 +503,7 @@ async def dialer_tick(key: str = Query(default="", max_length=128), x_dialer_key
 
 
 # ── Phone conversation loop (free Twilio trial): Twilio speech ⇄ Python ⇄ Groq ──────
-async def twilio_form(request: Request) -> dict[str, str]:
+async def twilio_form(request: Request, live_call_ok: bool = False) -> dict[str, str]:
     """Parse Twilio's form POST and verify X-Twilio-Signature (proves the request came from Twilio)."""
     body = (await request.body()).decode()
     params = {k: v[0] for k, v in parse_qs(body, keep_blank_values=True).items()}
@@ -525,12 +525,19 @@ async def twilio_form(request: Request) -> dict[str, str]:
             if params.get("AccountSid") == s.twilio_sid:
                 print(f"[twilio] WARN signature mismatch on {request.url.path} but AccountSid matches — accepted. "
                       f"keys={sorted(params)} url={url}", flush=True)
+            elif live_call_ok and params.get("CallSid") and await _is_live_call(params["CallSid"]):
+                pass   # live-speech updates for a call in progress (its unguessable CallSid has an open session)
             else:
                 print(f"[twilio] signature mismatch on {request.url.path} (signed url: {url})", flush=True)
                 raise HTTPException(403, "bad Twilio signature")
     print(f"[twilio] {request.url.path} CallSid={params.get('CallSid', '')[-6:]} status={params.get('CallStatus')} "
           f"speech={params.get('SpeechResult', '')[:60]!r}", flush=True)
     return params
+
+
+async def _is_live_call(call_sid: str) -> bool:
+    from . import cache
+    return bool(re.fullmatch(r"CA[0-9a-f]{32}", call_sid)) and bool(await cache.get_session(shared_client(), call_sid))
 
 
 def _xml(content: str) -> Response:
@@ -559,8 +566,9 @@ async def phone_turn(request: Request, lead: str = Query(default="", max_length=
 async def phone_partial(request: Request, lead: str = Query(default="", max_length=64),
                         http: httpx.AsyncClient = Depends(http_client)):
     """Live words while the lead is speaking (Gather partialResultCallback): a plain "yes" is answered at once."""
-    form = await twilio_form(request)
+    form = await twilio_form(request, live_call_ok=True)
     heard = form.get("UnstableSpeechResult") or form.get("StableSpeechResult") or ""
+    print(f"[instant] partial heard={heard[:40]!r} keys={sorted(form)}", flush=True)
     return {"result": await phone_agent.partial(http, form.get("CallSid", ""), _uuid_or_blank(lead), heard)}
 
 
@@ -568,7 +576,7 @@ async def phone_partial(request: Request, lead: str = Query(default="", max_leng
 async def phone_next(request: Request, n: int = 0, http: httpx.AsyncClient = Depends(http_client)):
     """Where an instantly-answered call is moved to: the reply prepared by /api/phone/partial."""
     from . import cache
-    form = await twilio_form(request)
+    form = await twilio_form(request, live_call_ok=True)
     xml = await cache.get_text(http, f"next:{form.get('CallSid', '')}:{n}")
     return _xml(xml or '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>')
 
