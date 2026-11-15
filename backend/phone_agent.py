@@ -372,6 +372,8 @@ async def finish(http: httpx.AsyncClient, call_sid: str, ended_reason: str = "cu
     update = {k: v for k, v in update.items() if v is not None}
     await sb.update("calls", {"vapi_call_id": f"eq.{_sid_key(call_sid)}"}, update)
     status = await apply_lead_update(sb, {**update, "lead_id": row.get("lead_id"), "vapi_call_id": _sid_key(call_sid)}, groq)
+    from . import handoff
+    await handoff.after_call(http, _sid_key(call_sid))   # CRM webhook (Settings → Sales team hand-off)
     if update.get("interest") == "hot":
         await telegram_alert(http, f"🔥 Hot lead (phone): {row.get('name') or 'Caller'}\n{update['summary']}")
     return {"finished": True, "interest": update.get("interest"), "lead_status": status}

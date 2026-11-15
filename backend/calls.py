@@ -127,6 +127,8 @@ async def process_end_of_call(http: httpx.AsyncClient, msg: dict) -> dict:
             result["recording"] = f"failed: {type(e).__name__}: {e}"[:300]
 
     status = await apply_lead_update(sb, row, Groq(http))
+    from . import handoff
+    result["crm"] = await handoff.after_call(http, call_id)   # CRM webhook (Settings → Sales team hand-off)
     if status:
         result["lead_status"] = status
     if row.get("interest") == "hot":

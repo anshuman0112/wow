@@ -95,6 +95,7 @@ alter table calls add column if not exists score_breakdown jsonb;
 alter table calls add column if not exists objections jsonb;
 alter table calls add column if not exists decision_maker text;
 alter table calls add column if not exists next_action text;
+alter table calls add column if not exists crm_status text;   -- CRM webhook delivery result
 
 -- 4. Public read views for the dashboard (phone numbers masked)
 create or replace view leads_public as
@@ -108,7 +109,7 @@ create or replace view calls_public as
   select id, vapi_call_id, lead_id, campaign_id, name, call_type, started_at, ended_at, duration_sec,
          ended_reason, recording_url, transcript, messages, summary, interest, intent, geography_fit,
          budget_fit, timeline_fit, sentiment_start, sentiment_end, language, callback_time, cost_usd,
-         call_back_at, score, score_breakdown, objections, decision_maker, next_action
+         call_back_at, score, score_breakdown, objections, decision_maker, next_action, crm_status
   from calls;
 
 -- 5. Row Level Security: lock raw tables; expose only the views

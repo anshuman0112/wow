@@ -270,6 +270,55 @@ async def google_leads(request: Request, http: httpx.AsyncClient = Depends(http_
     return {"ok": True, **res}
 
 
+# ── Hand-off to the sales team ───────────────────────────────────────────────
+def _require_pin(x_admin_pin: str | None) -> None:
+    pin = _admin_pin()
+    if pin and not hmac.compare_digest((x_admin_pin or "").strip(), pin):
+        raise HTTPException(401, "Wrong admin PIN.")
+
+
+@app.get("/api/handoff/{call_key}")
+async def handoff_message(call_key: str, x_admin_pin: str | None = Header(default=None),
+                          http: httpx.AsyncClient = Depends(http_client)):
+    """Ready-to-send profile for WhatsApp (real phone number included, so the admin PIN is required)."""
+    from . import config_store, handoff
+    _require_pin(x_admin_pin)
+    call, lead = await handoff.load(Supabase(http), call_key[:80])
+    if not call:
+        raise HTTPException(404, "Call not found")
+    msg = handoff.text(handoff.profile(call, lead))
+    return {"text": msg, "whatsapp_url": handoff.whatsapp_url(msg, config_store.current()["handoff"]["sales_whatsapp"])}
+
+
+@app.get("/api/export/leads.csv")
+async def export_leads(only: str = Query(default="", max_length=10), x_admin_pin: str | None = Header(default=None),
+                       http: httpx.AsyncClient = Depends(http_client)):
+    from . import handoff
+    _require_pin(x_admin_pin)
+    body = await handoff.export_csv(Supabase(http), only)
+    name = f"wow-leads{'-' + only if only else ''}-{datetime.now(timezone.utc):%Y%m%d}.csv"
+    return Response(content=body.encode("utf-8"), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/api/handoff/echo")
+async def handoff_echo_receive(request: Request, http: httpx.AsyncClient = Depends(http_client)):
+    """Built-in test receiver for the CRM webhook: keeps the last payload for 10 minutes."""
+    from . import cache
+    body = (await request.body())[:20000].decode("utf-8", "replace")
+    if cache.enabled():
+        await cache._cmd(http, "SET", "handoff:echo", body, "EX", 600)
+    return {"received": True}
+
+
+@app.get("/api/handoff/echo/last")
+async def handoff_echo_last(x_admin_pin: str | None = Header(default=None), http: httpx.AsyncClient = Depends(http_client)):
+    from . import cache
+    _require_pin(x_admin_pin)
+    raw = await cache._cmd(http, "GET", "handoff:echo") if cache.enabled() else None
+    return {"last": json.loads(raw) if raw else None}
+
+
 class TestLead(BaseModel):
     phone: str = Field(default="+919000000999", max_length=24)
     name: str = Field(default="Test Lead", max_length=80)

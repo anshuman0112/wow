@@ -1,5 +1,7 @@
 import { getCalls, getCall, mode } from '../store.js';
-import { esc, icon, fmtDur, fmtDate, interestBadge, moodBadge, demoBanner } from '../ui.js';
+import { config } from '../config.js';
+import { pinFetch } from '../pin.js';
+import { esc, icon, fmtDur, fmtDate, interestBadge, moodBadge, demoBanner, toast } from '../ui.js';
 
 // Kept between visits, so opening a call and coming back keeps your dates, filter and sort.
 const view = { filter: 'all', from: '', to: '', sort: 'new', preset: 'all' };
@@ -48,6 +50,7 @@ export default async function callsView(el, [openId]) {
           <label class="small muted row" style="gap:6px">From <input class="input" type="date" id="from" value="${esc(view.from)}"></label>
           <label class="small muted row" style="gap:6px">To <input class="input" type="date" id="to" value="${esc(view.to)}"></label>
           <span class="spacer"></span>
+          <button class="btn btn-ghost small" id="csv" title="Leads with score, objections and next action (admin PIN)">${icon('upload')}Download leads (CSV)</button>
           <label class="small muted row" style="gap:6px">Sort
             <select class="input" id="sort">
               <option value="new" ${view.sort === 'new' ? 'selected' : ''}>Newest first</option>
@@ -95,6 +98,16 @@ export default async function callsView(el, [openId]) {
     el.querySelector('#from').onchange = e => setDate('from', e.target.value);
     el.querySelector('#to').onchange = e => setDate('to', e.target.value);
     el.querySelector('#sort').onchange = e => { view.sort = e.target.value; draw(); };
+    el.querySelector('#csv').onclick = async () => {
+      try {
+        const only = ['hot', 'warm', 'cold'].includes(view.filter) ? view.filter : '';
+        const r = await pinFetch(`${config.apiBaseUrl}/export/leads.csv${only ? `?only=${only}` : ''}`);
+        const url = URL.createObjectURL(await r.blob());
+        const a = Object.assign(document.createElement('a'), { href: url, download: `wow-leads${only ? '-' + only : ''}.csv` });
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        toast(`Downloaded ${only || 'all'} leads`);
+      } catch (e) { toast(e.message); }
+    };
     const reset = el.querySelector('#reset');
     if (reset) reset.onclick = () => { Object.assign(view, { filter: 'all', from: '', to: '', preset: 'all' }); draw(); };
     el.querySelectorAll('tr[data-id]').forEach(tr => {
@@ -132,6 +145,11 @@ function profileCard(c) {
         <div><div class="muted small">Objections</div>${(c.objections || []).length ? `<ul style="margin:2px 0 0 16px;padding:0">${c.objections.map(o => `<li>${esc(o)}</li>`).join('')}</ul>` : '<b>None raised</b>'}</div>
       </div>
       ${c.next_action ? `<div class="banner" style="margin:14px 0 0">${icon('arrow')}<span><b>Next action:</b> ${esc(c.next_action)}</span></div>` : ''}
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn btn-primary small" data-handoff="wa" data-call="${esc(c.id)}">Share on WhatsApp</button>
+        <button class="btn btn-ghost small" data-handoff="copy" data-call="${esc(c.id)}">Copy profile</button>
+        ${c.crm_status ? `<span class="small muted">CRM: ${esc(c.crm_status)}</span>` : ''}
+      </div>
     </section>`;
 }
 
@@ -196,3 +214,14 @@ function openDrawer(c) {
   bg.querySelector('#close').focus();
   return close;
 }
+
+// Share a call's profile with the sales team (real phone number → admin PIN).
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-handoff]');
+  if (!b) return;
+  try {
+    const j = await (await pinFetch(`${config.apiBaseUrl}/handoff/${encodeURIComponent(b.dataset.call)}`)).json();
+    if (b.dataset.handoff === 'wa') window.open(j.whatsapp_url, '_blank', 'noopener');
+    else { await navigator.clipboard.writeText(j.text); toast('Profile copied'); }
+  } catch (err) { toast(err.message); }
+});
