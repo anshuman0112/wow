@@ -177,7 +177,7 @@ class Groq:
         attempts: list[dict] = []
         self.last_usage = {"model": "in-progress", "attempts": attempts}   # kept even if the caller times us out
         for model in self._order(need):
-            body = {"model": model, "temperature": 0.3, "max_completion_tokens": max_tokens, "messages": messages}
+            body = {"model": model, "temperature": 0.2, "max_completion_tokens": max_tokens, "messages": messages}
             if not live:   # live turns skip Groq's strict JSON check: it rejected some replies with a 400 (~0.5 s lost)
                 body["response_format"] = {"type": "json_object"}
             if model.startswith("openai/gpt-oss"):
@@ -223,7 +223,7 @@ class Groq:
         attempts: list[dict] = []
         self.last_usage = {"model": "in-progress", "attempts": attempts}
         for model in self._order(need):
-            body = {"model": model, "temperature": 0.3, "max_completion_tokens": max_tokens, "messages": messages,
+            body = {"model": model, "temperature": 0.2, "max_completion_tokens": max_tokens, "messages": messages,
                     "stream": True, "stream_options": {"include_usage": True}}
             if model.startswith("openai/gpt-oss"):
                 body["reasoning_effort"] = "low"
