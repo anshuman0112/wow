@@ -622,7 +622,7 @@ async def phone_relay_start(request: Request, lead: str = Query(default="", max_
     form = await twilio_form(request)
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
     return _xml(await relay_agent.start(http, form.get("CallSid", ""), _uuid_or_blank(lead), f"wss://{host}/ws/relay",
-                                        callback=bool(cb)))
+                                        callback=bool(cb), minimal=request.query_params.get("minimal") == "1"))
 
 
 @app.websocket("/ws/relay")

@@ -70,7 +70,13 @@ def say_as(text: str) -> str:
     return text
 
 
-def twiml_relay(ws_url: str, call_sid: str, lead_id: str, hello: str, voice: str) -> str:
+def twiml_relay(ws_url: str, call_sid: str, lead_id: str, hello: str, voice: str, minimal: bool = False) -> str:
+    if minimal:   # diagnostic: Twilio's defaults only (tells a settings problem apart from a blocked feature)
+        return ('<?xml version="1.0" encoding="UTF-8"?><Response><Connect>'
+                f'<ConversationRelay url={quoteattr(ws_url)} welcomeGreeting={quoteattr(say_as(hello))}>'
+                f'<Parameter name="lead" value={quoteattr(lead_id)}/>'
+                f'<Parameter name="token" value={quoteattr(call_token(call_sid))}/>'
+                '</ConversationRelay></Connect><Say>The live connection could not start.</Say><Hangup/></Response>')
     provider, name = tts_voice(voice)
     return ('<?xml version="1.0" encoding="UTF-8"?><Response><Connect>'
             f'<ConversationRelay url={quoteattr(ws_url)} welcomeGreeting={quoteattr(say_as(hello))} '
@@ -81,7 +87,8 @@ def twiml_relay(ws_url: str, call_sid: str, lead_id: str, hello: str, voice: str
             '</ConversationRelay></Connect><Hangup/></Response>')
 
 
-async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, ws_url: str, callback: bool = False) -> str:
+async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, ws_url: str, callback: bool = False,
+                minimal: bool = False) -> str:
     """Twilio fetches this when the lead answers: create the session, return the ConversationRelay TwiML."""
     from . import voices
     sb = Supabase(http)
@@ -99,7 +106,7 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, ws_url: st
                    "location": lead.get("location"), "session_store": "redis"}}
     if not await cache.set_session(http, call_sid, row):
         await sb.upsert("calls", row, "vapi_call_id")
-    return twiml_relay(ws_url, call_sid, lead.get("id") or "", hello, voice)
+    return twiml_relay(ws_url, call_sid, lead.get("id") or "", hello, voice, minimal)
 
 
 # Sentence ends: . ! ? followed by a space — but not "Rs. 5", "e.g. x", "approx. 30", "No. 7", "Mr. X".
