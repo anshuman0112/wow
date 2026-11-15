@@ -508,11 +508,11 @@ def reply_key(messages: list[dict], lang: str) -> str | None:
     from . import config_store
     speech = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
     words = re.sub(r"[^a-z0-9 ]", " ", speech.lower()).split()
-    if not words or len(words) > 8:
-        return None
+    if not words or len(words) > 8 or not speech.strip().endswith((".", "?", "!")):
+        return None   # only finished sentences: a reply to a half-heard sentence must never be reused
     asked = next((m["text"] for m in reversed(messages[:-1]) if m["role"] == "assistant"), "")
     state = f"{config_store.version}|{lang}|{','.join(sorted(faq.covered(messages[:-1])))}|{asked.strip().lower()}|{' '.join(words)}"
-    return "reply:" + hashlib.sha256(state.encode()).hexdigest()[:24]
+    return "reply2:" + hashlib.sha256(state.encode()).hexdigest()[:24]   # reply2: old entries (some to half sentences) are dropped
 
 
 async def respond(groq: Groq, messages: list[dict], name: str | None, location: str | None, lang: str) -> dict:
