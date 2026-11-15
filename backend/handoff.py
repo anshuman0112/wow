@@ -50,10 +50,13 @@ def profile(call: dict, lead: dict) -> dict:
 def text(p: dict) -> str:
     lines = [f"🏡 Whispers of the Wind lead: {p['name'] or 'Unknown'}",
              f"📞 {p['phone'] or '-'}" + (f" · {p['city']}" if p.get("city") else "") + (f" · via {p['source']}" if p.get("source") else ""),
-             f"⭐ Score {p['score'] if p['score'] is not None else '-'}/100 ({(p['interest'] or '-').title()})",
-             f"• Intent: {p['intent'] or '-'}", f"• Location: {p['location_fit'] or '-'}",
-             f"• Budget: {p['budget_fit'] or '-'}", f"• Timeline: {p['timeline_fit'] or '-'}",
-             f"• {DECIDER.get(p['decision_maker'] or 'unknown', p['decision_maker'])}"]
+             (f"⭐ Score {p['score']}/100 ({(p['interest'] or '').title()})" if p["score"] is not None
+              else f"⭐ Interest: {p['interest'].title()}" if p.get("interest") else "")]
+    lines += [f"• {label}: {p[k]}" for label, k in (("Intent", "intent"), ("Location", "location_fit"),
+                                                   ("Budget", "budget_fit"), ("Timeline", "timeline_fit")) if p.get(k)]
+    if p.get("decision_maker") and p["decision_maker"] != "unknown":
+        lines.append(f"• {DECIDER.get(p['decision_maker'], p['decision_maker'])}")
+    lines = [l for l in lines if l]
     if p["objections"]:
         lines.append("⚠️ Objections: " + "; ".join(p["objections"]))
     if p.get("expert_call"):

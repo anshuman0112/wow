@@ -127,7 +127,15 @@ export default async function callsView(el, [openId]) {
 // The hand-back for the sales team: score with reasons (and the lead's own words), objections, who decides, next step.
 const DECIDER = { self: 'Decides alone', spouse: 'Decides with spouse', family: 'Decides with family', someone_else: 'Someone else decides', unknown: 'Not known' };
 function profileCard(c) {
-  if (c.score == null) return '';
+  if (c.score == null) return `
+    <section class="card card-pad">
+      <h3>Share with the sales team</h3>
+      <p class="muted small" style="margin-top:4px">This call was made before lead scoring was added, so it has no score. You can still send its summary.</p>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="btn btn-primary small" data-handoff="wa" data-call="${esc(c.id)}">Share on WhatsApp</button>
+        <button class="btn btn-ghost small" data-handoff="copy" data-call="${esc(c.id)}">Copy profile</button>
+      </div>
+    </section>`;
   const rows = c.score_breakdown || [];
   return `
     <section class="card card-pad">

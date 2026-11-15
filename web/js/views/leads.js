@@ -76,6 +76,7 @@ export default async function leadsView(el) {
                     : `<div class="row" style="gap:6px;flex-wrap:nowrap">
                         <button class="btn small" data-call="${esc(l.id)}" title="${realCalls ? 'Ring this lead\'s real phone' : 'Start a browser call with Divya, personalised for this lead'}" ${realCalls && (mode() === 'demo' || l.status === 'calling') ? 'disabled' : ''}>${icon('phone')}${realCalls ? (l.status === 'calling' ? 'Calling…' : 'Call phone') : 'Call now'}</button>
                         ${realCalls ? `<a class="btn btn-ghost small" href="#/talk/${esc(l.id)}" title="Talk to Divya in the browser as this lead">Web call</a>` : ''}
+                        <button class="btn btn-ghost small" data-wa="${esc(l.id)}" title="Send this lead to the sales team on WhatsApp">WhatsApp</button>
                       </div>`}</td>
                 </tr>`).join('') || `<tr><td colspan="10" class="empty">No leads match.</td></tr>`}
             </tbody>
@@ -224,3 +225,18 @@ function mappingPanel(p) {
       <button class="btn" id="cancel">Cancel</button>
     </div>`;
 }
+
+// lead-wa-handler: send a lead to the sales team on WhatsApp (opens WhatsApp with the profile typed out)
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-wa]');
+  if (!b) return;
+  b.disabled = true;
+  try {
+    const { config } = await import('../config.js');
+    const r = await fetch(`${config.apiBaseUrl}/handoff/lead/${encodeURIComponent(b.dataset.wa)}`);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || 'Could not prepare the message');
+    window.open(j.whatsapp_url, '_blank', 'noopener');
+  } catch (err) { (await import('../ui.js')).toast(err.message); }
+  b.disabled = false;
+});

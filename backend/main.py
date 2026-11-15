@@ -332,6 +332,27 @@ def _require_pin(x_admin_pin: str | None) -> None:
         raise HTTPException(401, "Wrong admin PIN.")
 
 
+@app.get("/api/handoff/lead/{lead_id}")
+async def handoff_lead(lead_id: str, http: httpx.AsyncClient = Depends(http_client)):
+    """WhatsApp message for a lead from the Leads page: their latest call's profile, or their details if not called yet."""
+    from . import config_store, handoff
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", lead_id):
+        raise HTTPException(400, "bad lead id")
+    sb = Supabase(http)
+    last = await sb.select("calls", {"select": "vapi_call_id", "lead_id": f"eq.{lead_id}", "order": "started_at.desc", "limit": "1"})
+    if last:
+        call, lead = await handoff.load(sb, last[0]["vapi_call_id"])
+    else:
+        rows = await sb.select("leads", {"select": "name,phone,location,budget,source,status", "id": f"eq.{lead_id}"})
+        if not rows:
+            raise HTTPException(404, "Lead not found")
+        call, lead = {"name": rows[0].get("name")}, rows[0]
+    msg = handoff.text(handoff.profile(call, lead))
+    if not last:
+        msg += "\nℹ️ Not called yet." + (f" Budget stated: {lead['budget']}." if lead.get("budget") else "")
+    return {"text": msg, "whatsapp_url": handoff.whatsapp_url(msg, config_store.current()["handoff"]["sales_whatsapp"])}
+
+
 @app.get("/api/handoff/{call_key}")
 async def handoff_message(call_key: str, x_admin_pin: str | None = Header(default=None),
                           http: httpx.AsyncClient = Depends(http_client)):
