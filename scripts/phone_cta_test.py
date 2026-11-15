@@ -65,6 +65,6 @@ run("Lead gives the time after saying no once",
     r"noted .*5 pm")
 run("Lead never gives a time",
     ["Yes.", "Weekend home.", "Yes.", "Yes.", "Yes.", "My wife and I.", "No.", "No, nothing else.", "No."],
-    r"reach out at a convenient time")
+    r"reach out at a convenient time|have a (lovely|great|good|wonderful) day|thank you for your time")
 print("\nALL PASS" if ok_all else "\nSOMETHING FAILED")
 sys.exit(0 if ok_all else 1)

@@ -145,9 +145,9 @@ def covered(messages: list[dict]) -> set[str]:
     for step in ("intent", "geography", "budget", "timeline", "decision"):
         pat = ASKED.get(step, r"$^")
         # the exact question text from Settings also counts (so reworded questions are still recognised)
-        heads = [re.escape(qs[step][lang].lower()[:30]) for lang in ("en", "hi") if qs.get(step, {}).get(lang)]
+        heads = [re.escape(qs[step][lang].lower().replace("-", " ")[:30]) for lang in ("en", "hi") if qs.get(step, {}).get(lang)]
         for i, m in enumerate(messages[:-1]):
-            said = m["text"].lower()
+            said = m["text"].lower().replace("-", " ")
             if m["role"] == "assistant" and (re.search(pat, said) or any(re.search(h, said) for h in heads)) and \
                     any(x["role"] == "user" and not _is_question(x["text"]) for x in messages[i + 1:]):
                 c.add(step)
