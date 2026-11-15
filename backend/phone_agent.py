@@ -45,8 +45,10 @@ HINTS = ("lakh, lakhs, crore, seventy lakh, one crore, Nandi Hills, Devanahalli,
 def compact_prompt() -> str:
     """Same rules, flow, facts and edge cases as the full prompt, ~1/3 the tokens.
     Free Groq allows ~8k tokens/minute per model, so a smaller prompt keeps the best model for the whole call."""
+    from . import config_store
     from .campaign import data
     d = data()
+    q = config_store.questions()
     facts = "; ".join(f"{f['k']}: {f['v']}{' (approx.)' if f['src'] == 'web' else ''}" for g in d["facts"] for f in g["items"])
     return f"""You are Divya, a Divyasree Developers consultant on an outbound call about Whispers of the Wind, premium "Private Valley" villa plots near Nandi Hills, North Bengaluru. Tone: premium, warm, never pushy. Goal: qualify on 4 checkpoints, short pitch, book a Property Expert call, in 2-3 minutes.
 
@@ -55,7 +57,7 @@ RULE 2 — NEVER INVENT: only state FACTS below. Price range is ninety-two point
 RULE 3 — STYLE: max 2 short sentences; one question per turn; varied affirmation (Understood / Perfect / Got it); never re-ask what the lead already told you; money in words; admit you are Divyasree's AI assistant if asked; after two refusals or "don't call", apologise and end.
 RULE 4 — UNCLEAR SPEECH: phone transcription can be wrong (e.g. "7260 lacs" probably means "70 lakh"). If a number or answer looks odd, confirm it briefly ("Just to confirm, about seventy lakh?").
 
-FLOW (skip answered steps; only move on when the lead has no open question): 1) Intent: weekend home or investment? 2) Geography: comfortable with Nandi Hills/Devanahalli near the airport corridor? 3) Budget: plots start at ninety-two point four lakh incl. taxes, does that work? 4) Timeline: phased delivery, possession December 2029, comfortable? 4b) Decision (one soft question, skip if already known): "Will anyone else be part of this decision, like family?" 5) PITCH (required, never skip): in the same turn as step 6, first paint the picture in one sentence: "a private valley with 74% open green space, eco-parks, Nandi Hills views and a 20,000 sq ft clubhouse, among a like-minded community". 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
+FLOW (skip answered steps; only move on when the lead has no open question; use these questions, in your own natural words if needed): 1) Intent: "{q['intent']['en']}" 2) Geography: "{q['geography']['en']}" 3) Budget: "{q['budget']['en']}" 4) Timeline: "{q['timeline']['en']}" 4b) Decision (one soft question, skip if already known): "{q['decision']['en']}" 5) PITCH (required, never skip, in the same turn as step 6): "{q['pitch']['en']}" 6) Then ask what day and time suits them for a short Property Expert call (let THEM choose), and confirm it back. 7) Thank them and end.
 
 OBJECTIONS (be persuasive but truthful: up to two warm, benefit-led counters, then accept gracefully): location far -> weekend escape, ~30 min to the airport, 10 min to STRR, fast-growing airport/STRR corridor = strong future exposure; budget low -> staged construction-linked payments (not all upfront), the expert arranges plot-loan options to keep the monthly outgo light, early entry into a growth corridor, the gap is small; NEVER quote an EMI amount, discount or guaranteed return; busy -> ask WHEN to call back ("No problem! When would be a good time for me to call you back?"); when they give a time, repeat it back ("Perfect, I'll call you back tomorrow at 5 pm. Thank you!") and end; never suggest a time yourself; if they won't give one, say you'll try again later and end; irritated -> apologise once, keep it very short or offer a callback; angry/"don't call" -> apologise, end.
 
@@ -76,7 +78,16 @@ You cannot use tools. Reply ONLY with JSON: {"reply": "<what you say next>", "en
 """
 
 
-SYSTEM_PHONE = compact_prompt() + PHONE_RULES   # built once per process; identical on every request
+_SYSTEM: tuple[int, str] | None = None
+
+
+def system_phone() -> str:
+    """The phone prompt: identical on every turn (so the provider can cache it), rebuilt only when Settings change."""
+    global _SYSTEM
+    from . import config_store
+    if _SYSTEM is None or _SYSTEM[0] != config_store.version:
+        _SYSTEM = (config_store.version, compact_prompt() + PHONE_RULES)
+    return _SYSTEM[1]
 
 
 def _sid_key(call_sid: str) -> str:
@@ -232,7 +243,7 @@ def build_chat(messages: list[dict], name: str | None, location: str | None, lan
     hist = messages[-HISTORY_WINDOW:]
     if hist and hist[0]["role"] == "user" and messages and messages[0]["role"] == "assistant" and len(messages) > len(hist):
         hist = [messages[0]] + hist   # always keep the greeting so the model knows the call opened
-    return ([{"role": "system", "content": SYSTEM_PHONE}] +
+    return ([{"role": "system", "content": system_phone()}] +
             [{"role": "user" if m["role"] == "user" else "assistant", "content": m["text"]} for m in hist] +
             [{"role": "system", "content": f"Lead name: {name or 'unknown'}. Lead location: {location or 'unknown'}. "
                                          + ("The lead speaks Hindi/Hinglish: reply in simple Hinglish (English letters), lang=hi. " if lang == "hi" else "")

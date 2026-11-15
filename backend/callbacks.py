@@ -13,6 +13,7 @@ Rules that keep it polite (non-intrusive, as the brief asks):
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 from .clients import Groq
@@ -73,18 +74,35 @@ async def plan(groq: Groq, analysis: dict, call_time: datetime, tries_so_far: in
     return polite(at), note[:200]
 
 
-MAX_DIALS_NO_ANSWER = 3   # after 3 dialled calls nobody picked up → "Unreachable", stop
+# Re-attempt cadence from the Settings page: one entry per retry. "10m" / "2h" = after that long,
+# "next 11:00" = next day at 11:00 IST. After the last step the lead is marked unreachable.
+RETRY_STEPS: list[str] = ["2h", "next 11:00"]
+
+
+def max_dials() -> int:
+    """First call + one per retry step."""
+    return len(RETRY_STEPS) + 1
+
+
+def _step_time(step: str, now: datetime) -> datetime | None:
+    m = re.match(r"^(\d{1,4})(m|h)$", step.strip().lower())
+    if m:
+        n = int(m.group(1))
+        return polite(now + (timedelta(minutes=n) if m.group(2) == "m" else timedelta(hours=n)))
+    m = re.match(r"^next (\d{1,2}):(\d{2})$", step.strip().lower())
+    if m:
+        nxt = (now.astimezone(IST) + timedelta(days=1)).replace(hour=int(m.group(1)), minute=int(m.group(2)),
+                                                                  second=0, microsecond=0)
+        return polite(nxt.astimezone(timezone.utc))
+    return None
 
 
 def reattempt_at(dialled: int, now: datetime | None = None) -> datetime | None:
-    """Rang but nobody picked up: when to try again. 1st miss → +2 h, 2nd → next day 11 am, 3rd → stop."""
+    """Rang but nobody picked up: when to try again (Settings → re-attempt cadence), or None = stop."""
     now = now or datetime.now(timezone.utc)
-    if dialled >= MAX_DIALS_NO_ANSWER:
-        return None
-    if dialled <= 1:
-        return polite(now + timedelta(hours=2))
-    nxt = (now.astimezone(IST) + timedelta(days=1)).replace(hour=11, minute=0, second=0, microsecond=0)
-    return nxt.astimezone(timezone.utc)
+    if dialled < 1 or dialled >= max_dials():
+        return None if dialled >= max_dials() else _step_time(RETRY_STEPS[0], now) if RETRY_STEPS else None
+    return _step_time(RETRY_STEPS[dialled - 1], now)
 
 
 async def schedule_reattempt(sb, lead_id: str) -> dict:
@@ -95,7 +113,7 @@ async def schedule_reattempt(sb, lead_id: str) -> dict:
     dialled = lead.get("attempts") or 0
     at = reattempt_at(dialled)
     patch = {"status": "no_answer", "next_call_at": at.isoformat() if at else None,
-             "callback_note": (f"no answer ({dialled} of {MAX_DIALS_NO_ANSWER} tries), re-attempt {fmt_ist(at)}" if at
+             "callback_note": (f"no answer ({dialled} of {max_dials()} tries), re-attempt {fmt_ist(at)}" if at
                                else f"unreachable: no answer after {dialled} tries")}
     await sb.update("leads", {"id": f"eq.{lead_id}"}, patch)
     return patch

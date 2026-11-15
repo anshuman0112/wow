@@ -138,3 +138,4 @@ alter table leads drop constraint if exists leads_status_check;
 alter table leads add constraint leads_status_check
   check (status in ('new','queued','calling','called','no_answer','do_not_call','re_engaged','callback'));
 alter table campaigns add column if not exists phone_voice text;
+alter table campaigns add column if not exists settings jsonb not null default '{}'::jsonb;   -- Settings page

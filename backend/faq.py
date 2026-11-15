@@ -10,6 +10,12 @@ import re
 
 from .campaign import data
 
+
+def _questions() -> dict:
+    """Divya's questions, as set on the Settings page (campaign defaults until changed)."""
+    from . import config_store
+    return config_store.questions()
+
 INTENTS: dict[str, str] = {
     "rate": r"\b(per (sq|square)|sq ?ft rate|rate per|per sqft|psf)\b",
     "price": r"\b(price|pricing|cost|rate|kitna|kitne|kitni|kimat|keemat|daam|starting|how much)\b",
@@ -75,9 +81,14 @@ def covered(messages: list[dict]) -> set[str]:
     lead = " ".join(m["text"].lower() for m in messages if m["role"] == "user")
     aanya = " ".join(m["text"].lower() for m in messages if m["role"] == "assistant")
     c = set()
-    for step, pat in ASKED.items():
+    qs = _questions()
+    for step in ("intent", "geography", "budget", "timeline", "decision"):
+        pat = ASKED.get(step, r"$^")
+        # the exact question text from Settings also counts (so reworded questions are still recognised)
+        heads = [re.escape(qs[step][lang].lower()[:30]) for lang in ("en", "hi") if qs.get(step, {}).get(lang)]
         for i, m in enumerate(messages[:-1]):
-            if m["role"] == "assistant" and re.search(pat, m["text"].lower()) and \
+            said = m["text"].lower()
+            if m["role"] == "assistant" and (re.search(pat, said) or any(re.search(h, said) for h in heads)) and \
                     any(x["role"] == "user" for x in messages[i + 1:]):
                 c.add(step)
                 break
@@ -99,7 +110,7 @@ def covered(messages: list[dict]) -> set[str]:
 
 def next_question(messages: list[dict], lang: str) -> str:
     done = covered(messages)
-    nq = data()["nextQuestion"]
+    nq = _questions()
     # Don't repeat a question we asked in the last two replies — if the lead skipped it, move on.
     recent = " ".join(m["text"] for m in messages[-4:] if m["role"] == "assistant")
     pending = [s for s in ("intent", "geography", "budget", "timeline", "decision", "pitch", "callback") if s not in done]
@@ -239,10 +250,10 @@ def guard(reply: str, messages: list[dict], lang: str) -> str:
         return next_question(messages, lang)
     if invented:
         # Never propose a slot the lead didn't choose — ask them instead.
-        r = data()["nextQuestion"]["pitch"][lang] if "pitch" not in covered(messages) else \
+        r = _questions()["pitch"][lang] if "pitch" not in covered(messages) else \
             ("What day and time would suit a short call with our Property Expert?" if lang == "en"
              else "Hamare Property Expert ke saath call ke liye kaunsa din aur time theek rahega?")
     elif asks_expert and not lead_gave_slot and "pitch" not in covered(messages + [{"role": "assistant", "text": r}]):
         # The PDF requires the pitch before the CTA.
-        r = data()["nextQuestion"]["pitch"][lang]
+        r = _questions()["pitch"][lang]
     return r

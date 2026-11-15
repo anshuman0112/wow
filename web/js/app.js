@@ -9,6 +9,7 @@ import calls from './views/calls.js';
 import campaignView from './views/campaign.js';
 import brief from './views/brief.js';
 import integrations from './views/integrations.js';
+import settingsView from './views/settings.js';
 
 const routes = [
   { path: 'overview', label: 'Overview', icon: 'home', view: overview },
@@ -19,6 +20,7 @@ const routes = [
   { path: 'calls', label: 'Calls', icon: 'history', view: calls },
   { section: 'Setup' },
   { path: 'campaign', label: 'Campaign & knowledge', icon: 'book', view: campaignView },
+  { path: 'settings', label: 'Settings', icon: 'check', view: settingsView },
   { path: 'brief', label: 'Assignment checklist', icon: 'list', view: brief },
   { path: 'integrations', label: 'Integrations', icon: 'plug', view: integrations },
 ];

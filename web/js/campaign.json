@@ -485,8 +485,8 @@
       "hi": "Kya Nandi Hills aur Devanahalli ka area, airport ke paas, aapke liye theek hai?"
     },
     "budget": {
-      "en": "Would a range starting at ninety-two point four lakh work for you?",
-      "hi": "Kya ninety-two point four lakh se shuru hone wali range aapke liye theek hai?"
+      "en": "Plots start at ninety-two point four lakh, inclusive of taxes. Would that range work for you?",
+      "hi": "Plots ninety-two point four lakh se shuru hote hain, taxes ke saath. Kya yeh range aapke liye theek hai?"
     },
     "timeline": {
       "en": "Possession is planned for December 2029. Is that timeline comfortable?",

@@ -39,6 +39,11 @@ async def server_timing(request: Request, call_next):
     """Expose pure server processing time (excludes network to the caller) as a standard Server-Timing header."""
     import time
     t0 = time.perf_counter()
+    if request.url.path.startswith("/api/"):
+        # Settings page values (questions, scoring, hours, cadence…): refreshed at most every 30 s.
+        from . import config_store
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            await config_store.ensure(client)
     response = await call_next(request)
     response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.0f}"
     return response
@@ -330,6 +335,65 @@ async def phone_stream_start(request: Request, lead: str = Query(default="", max
 @app.websocket("/ws/twilio")
 async def twilio_media_stream(ws: WebSocket):
     await stream_agent.handle(ws)
+
+
+# ── Settings page ───────────────────────────────────────────────────────────
+@app.get("/api/settings")
+async def get_settings():
+    from . import callbacks, config_store
+    cfg = config_store.current()
+    return {"settings": cfg, "defaults": config_store.defaults(), "max_dials": callbacks.max_dials(),
+            "pin_required": bool(_admin_pin())}
+
+
+def _admin_pin() -> str:
+    import os
+    return os.environ.get("ADMIN_PIN", "").strip()
+
+
+@app.put("/api/settings")
+async def put_settings(request: Request, x_admin_pin: str | None = Header(default=None),
+                       http: httpx.AsyncClient = Depends(http_client)):
+    """Save settings (admin PIN required). Also re-syncs the browser assistant's prompt with the new questions."""
+    from . import cache, config_store
+    pin = _admin_pin()
+    if pin:
+        fails_key = "settings:pin_fails"
+        fails = int(await cache._cmd(http, "GET", fails_key) or 0) if cache.enabled() else 0
+        if fails >= 10:
+            raise HTTPException(429, "Too many wrong PINs. Try again in an hour.")
+        if not hmac.compare_digest((x_admin_pin or "").strip(), pin):
+            if cache.enabled():
+                await cache._cmd(http, "INCR", fails_key)
+                await cache._cmd(http, "EXPIRE", fails_key, 3600)
+            raise HTTPException(401, "Wrong admin PIN.")
+    body = await request.json()
+    try:
+        saved = await config_store.save(http, body.get("settings") or {})
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    synced = await _sync_browser_prompt(http)
+    return {"saved": True, "settings": saved, "browser_assistant_synced": synced}
+
+
+async def _sync_browser_prompt(http: httpx.AsyncClient) -> bool:
+    """Put the new questions into the browser (Vapi) assistant too, so both channels ask the same thing."""
+    from .campaign import render_prompt
+    from .clients import Vapi
+    s = settings()
+    if not (s.vapi_key and s.vapi_assistant_id):
+        return False
+    try:
+        h = {"Authorization": f"Bearer {s.vapi_key}"}
+        a = (await http.get(f"{Vapi.BASE}/assistant/{s.vapi_assistant_id}", headers=h)).json()
+        model = a.get("model") or {}
+        msgs = model.get("messages") or [{"role": "system", "content": ""}]
+        msgs[0] = {"role": "system", "content": render_prompt()}
+        model["messages"] = msgs
+        r = await http.patch(f"{Vapi.BASE}/assistant/{s.vapi_assistant_id}", headers=h, json={"model": model})
+        return r.is_success
+    except httpx.HTTPError:
+        return False
 
 
 # ── Phone voice library (dashboard → Voices) ────────────────────────────────

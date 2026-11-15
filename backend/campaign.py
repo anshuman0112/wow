@@ -26,7 +26,11 @@ def render_prompt() -> str:
             f"## {g['group']}\n" + "\n".join(f"- {f['k']}: {f['v']}{' [web]' if f['src'] == 'web' else ''}" for f in g["items"])
             for g in d["facts"])
     pron = "\n".join(f"- {p['term']} → \"{p['say']}\"" for p in d["pronunciation"])
-    return PROMPT_TEMPLATE.read_text(encoding="utf-8").replace("[[FACTS]]", facts).replace("[[PRONUNCIATION]]", pron)
+    text = PROMPT_TEMPLATE.read_text(encoding="utf-8").replace("[[FACTS]]", facts).replace("[[PRONUNCIATION]]", pron)
+    from . import config_store   # Divya's questions as set on the Settings page
+    for k, q in config_store.questions().items():
+        text = text.replace(f"[[Q_{k.upper()}]]", q["en"])
+    return text
 
 
 def voice_config(voice_id: str | None = None) -> dict:
