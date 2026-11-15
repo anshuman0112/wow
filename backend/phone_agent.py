@@ -315,6 +315,14 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
         await save_session(http, sb, call_sid, row)
         return twiml_gather("Are you still there?", row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("voice"), raw.get("stt"), raw.get("instant", False))
 
+    if VOICEMAIL.search(speech):
+        # An answering machine / "not available" greeting, not the lead: leave one short line and hang up.
+        bye = "Sorry I missed you. This is Divya from Divya shree Developers; I'll try you again another time. Thank you!"
+        messages.append({"role": "user", "text": speech.strip()})
+        messages.append({"role": "assistant", "text": bye})
+        raw["ended_reason"] = "voicemail"
+        await save_session(http, sb, call_sid, row)
+        return twiml_goodbye(bye, raw.get("voice"))
     if TRIAL_NOISE.search(speech) and len(messages) <= 1:
         await save_session(http, sb, call_sid, row)
         return twiml_gather("Sorry about that. As I was saying, is this a good time for two minutes?",
@@ -393,6 +401,10 @@ def speakable(text: str) -> str:
 
 # Twilio's trial announcement is sometimes transcribed as the lead's first words — it isn't them.
 TRIAL_NOISE = re.compile(r"no longer being recorded|trial account|press any key|free trial|twilio", re.I)
+# Voicemail / network messages heard on real calls ("The person you're trying to reach… please record your message").
+VOICEMAIL = re.compile(r"person you('| a)?re (trying to )?(reach|call)|record your message|leave (a|your) message|after the (tone|beep)|"
+                       r"voice ?mail|mailbox|is not available|not reachable|switched off|cannot be reached|at the tone|"
+                       r"finished recording|number you have dialled|number you have dialed", re.I)
 
 DUPLICATE_WINDOW_S = 1.0   # same words again within 1 s = a delivery copy (retries arrive within ms; a real answer takes seconds)
 REPLY_BUDGET_S = 2.5   # max time we let the AI think on a live call before falling back to the script
