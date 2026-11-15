@@ -1,0 +1,9 @@
+Name,Phone,City,Budget,Email,Notes
+Rahul Sharma,98450 10001,Bengaluru,1.2 Cr,rahul.sharma@example.com,Wants a weekend home
+Priya Nair,+91-98450-10002,"Whitefield, Bengaluru",95 Lakh,priya.nair@example.com,"Investment, NRI parents"
+Arjun Reddy,09845010003,Hyderabad,80 Lakh,arjun.r@example.com,Budget may be low
+Sneha Iyer,919845010004,Chennai,1.5 Cr,sneha.iyer@example.com,Asked about clubhouse
+Vikram Singh,9845010005,Delhi,2 Cr,vikram.s@example.com,Prefers Hindi
+Ananya Gupta,+971 50 100 0006,Dubai,1.8 Cr,ananya.g@example.com,NRI investor
+Rahul Sharma (duplicate),9845010001,Bengaluru,1.2 Cr,,Same phone as row 1 -> should be skipped
+Bad Number,12345,Pune,90 Lakh,,Invalid phone -> should be rejected

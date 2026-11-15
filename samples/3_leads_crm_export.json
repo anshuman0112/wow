@@ -1,0 +1,38 @@
+[
+  {
+    "full_name": "Suresh Babu",
+    "mobile": "+91 98440 30001",
+    "area": "Electronic City, Bengaluru",
+    "price_range": "1.4 Cr",
+    "mail": "suresh.b@example.com",
+    "comments": "Wants site visit",
+    "campaign": "Diwali 2026"
+  },
+  {
+    "full_name": "Neha Verma",
+    "mobile": "98440 30002",
+    "area": "Noida",
+    "price_range": "1 Cr",
+    "mail": "neha.v@example.com",
+    "comments": "Investment only",
+    "campaign": "Diwali 2026"
+  },
+  {
+    "full_name": "Aditya Kulkarni",
+    "mobile": "98440-30003",
+    "area": "Pune",
+    "price_range": "2.2 Cr",
+    "mail": "aditya.k@example.com",
+    "comments": "Asked about RERA",
+    "campaign": "Diwali 2026"
+  },
+  {
+    "full_name": "Fatima Sheikh",
+    "mobile": "9844030004",
+    "area": "Bengaluru",
+    "price_range": "85 Lakh",
+    "mail": "fatima.s@example.com",
+    "comments": "Location too far?",
+    "campaign": "Diwali 2026"
+  }
+]

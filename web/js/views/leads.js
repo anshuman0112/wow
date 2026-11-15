@@ -20,7 +20,7 @@ export default async function leadsView(el) {
     el.innerHTML = `
       ${demoBanner(mode())}
       <div class="page-head">
-        <div><h1>Leads</h1><p class="muted">${leads.length} people · new leads are called automatically between 10 AM and 7 PM IST</p></div>
+        <div><h1>Leads</h1><p class="muted">${leads.length} people · press <b>Call phone</b> to have Divya call a lead (nobody is called automatically)</p></div>
       </div>
 
       ${realCalls && mode() !== 'demo' ? verifyPanel() : ''}
