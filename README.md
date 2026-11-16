@@ -78,7 +78,7 @@ flowchart LR
 | Backend | **Python FastAPI** on Vercel | Saves calls, imports leads, places phone calls, runs the phone conversation |
 | Browser calls | **Vapi** (Deepgram nova-3, GPT-4.1-mini, ElevenLabs Flash v2.5) | Low-latency voice demo with interruptions, English + Hindi |
 | Phone calls | **Twilio** trial | Rings the lead, turns speech into text, and speaks with a premium voice (Google Chirp3-HD) |
-| Phone brain | **Groq** (gpt-oss-120b / 20b) | Writes each reply from the compact system prompt |
+| Phone brain | **Groq** (qwen3.8-27b, then gpt-oss-20b / 120b as back-ups) | Writes each reply from the compact system prompt (temperature 0.2, switches model when one hits its free limit) |
 | Cache | **Upstash Redis** | Live call sessions (about 15 ms) and **zero-token answers** to the most-asked questions |
 | Database | **Supabase** | Leads, calls and analysis (the dashboard sees masked phone numbers) |
 
@@ -142,13 +142,15 @@ The app decides *who* to call and *what* to say; n8n is the alarm clock and the 
 Setup: `docker compose up -d`, open http://localhost:5678, then `python n8n/automation/build.py` and import the files in
 `n8n/automation/` (or run the `n8n import:workflow --separate --input=/automation` command in the container). Settings
 the workflows read from `.env`: `DIALER_SECRET`, `ALERT_EMAIL`, `ALERT_FROM_EMAIL`, `LEADS_SHEET_CSV_URL`.
-Emails use a Gmail **App password** saved in n8n as the SMTP credential "Gmail SMTP".
+Emails use a Gmail **App password** saved in n8n as the SMTP credential "SMTP account".
 The app endpoints n8n uses: `/api/dialer/tick`, `/api/automation/events?since=…`, `/api/automation/report` (all need the key).
 
 ### About the free Twilio trial
 - It can only call **verified** numbers. Anyone can verify their own number on the **Leads** page: Twilio rings them, and they type the 6-digit code shown on screen.
 - Every trial call starts with Twilio's short trial message ("press any key"). A paid Twilio account removes it.
 - Phone networks carry 8 kHz audio, which is why the phone voices are HD voices built for phone lines.
+- **No word-by-word streaming on phone calls.** The trial blocks Media Streams and ConversationRelay, so Divya speaks each reply with `<Say>` once it is complete. Server time is about 10–40 ms for FAQ answers and 0.3–0.6 s for AI answers; the rest of the pause (about 1.5 s) is Twilio's end-of-speech wait and voice generation. Browser calls (Vapi) do stream.
+- **No phone call recording.** Twilio refuses recording on trial accounts; browser calls are recorded. After an upgrade, set `PHONE_RECORD=1` (recordings are saved to the Supabase `recordings` bucket) and `TWILIO_MODE=relay` + `STREAM_BASE_URL` to switch on the streaming engine in `relay_agent.py`.
 
 ---
 
@@ -166,13 +168,15 @@ backend/                FastAPI app
   leads.py              Lead import with AI column mapping
   cache.py              Redis sessions + FAQ cache
   stream_agent.py       Live-audio streaming engine (off: the Twilio trial blocks Media Streams)
+  relay_agent.py        Word-by-word ConversationRelay engine (built and tested, off: blocked on the trial)
 web/                    Dashboard (static site)
   js/campaign.json      Facts, flow, edge cases, FAQ answers, voices: the single source of truth
 prompts/                System prompt template
 docs/                   System_Prompt.pdf, system_prompt.md, evaluation reports
 supabase/schema.sql     Tables, masked views, recordings bucket
 scripts/                Helpers: sync assistant, apply schema, evaluate, export PDF
-n8n/                    Earlier automation version (replaced by the Python API, kept for reference)
+n8n/automation/         Current n8n workflows: dialer (every minute), Hot-lead email, 7 pm report, Google Sheet to leads
+n8n/workflows/         Earlier n8n version (switched off, kept for reference)
 ```
 
 ---
