@@ -310,7 +310,7 @@
       "items": [
         {
           "k": "Education",
-          "v": "GITAM Doddaballapura, Nagarjuna College of Engineering, Stonehill International School corridor",
+          "v": "GITAM University Doddaballapura, Nagarjuna College of Engineering, Doddaballapura Composite Pre-University, Stonehill International School corridor",
           "src": "web"
         },
         {
@@ -325,6 +325,10 @@
         {
           "k": "Daily needs",
           "v": "Local markets and banks in Doddaballapura"
+        },
+        {
+          "k": "Advantages",
+          "v": "Fast-growing industrial corridor of Bengaluru Rural, clean air, scenic hill views, growth from the airport and STRR expressway"
         }
       ]
     },
@@ -467,16 +471,16 @@
       "hi": "Twenty thousand square foot clubhouse hai, pool aur gym, tennis, basketball aur pickleball courts, jogging aur cycling tracks, eco-parks, aur seventy-four percent open space."
     },
     "schools": {
-      "en": "Nearby education options include GITAM Doddaballapura, Nagarjuna College of Engineering and the Stonehill International School corridor.",
-      "hi": "Paas mein GITAM Doddaballapura, Nagarjuna College of Engineering aur Stonehill International School corridor hai."
+      "en": "For schools and colleges, there is GITAM University Doddaballapura, Nagarjuna College of Engineering, Doddaballapura Composite Pre-University college, and the Stonehill International School corridor.",
+      "hi": "Schools aur colleges ke liye GITAM University Doddaballapura, Nagarjuna College of Engineering, Doddaballapura Composite Pre-University college, aur Stonehill International School corridor paas mein hain."
     },
     "hospitals": {
-      "en": "For healthcare, the Columbia Asia Manipal network and Doddaballapura Government Hospital are nearby.",
-      "hi": "Healthcare ke liye Columbia Asia Manipal network aur Doddaballapura Government Hospital paas mein hain."
+      "en": "For healthcare, the Columbia Asia Manipal clinic network and Doddaballapura Government Hospital are nearby, along with local bazaars and banks in Doddaballapura town.",
+      "hi": "Healthcare ke liye Columbia Asia Manipal clinic network aur Doddaballapura Government Hospital paas mein hain, aur Doddaballapura town mein local bazaar aur bank bhi hain."
     },
     "location": {
-      "en": "It is in Nandi Valley at Heggadihalli, Doddaballapura: about fifteen minutes from the Nandi Hills foothills, ten minutes from the STRR corridor, twelve minutes from Doddaballapura railway station, and thirty to thirty-five minutes from the airport.",
-      "hi": "Yeh Nandi Valley mein Heggadihalli, Doddaballapura mein hai: Nandi Hills foothills se lagbhag pandrah minute, STRR corridor se das minute, Doddaballapura railway station se barah minute, aur airport se tees se paintees minute."
+      "en": "It is in Nandi Valley at Heggadihalli, Doddaballapura: about fifteen minutes from the Nandi Hills foothills, ten minutes from the STRR corridor, twelve minutes from Doddaballapura railway station, thirty to thirty-five minutes from the airport, and thirty-five minutes from Yelahanka.",
+      "hi": "Yeh Nandi Valley mein Heggadihalli, Doddaballapura mein hai: Nandi Hills foothills se lagbhag pandrah minute, STRR corridor se das minute, Doddaballapura railway station se barah minute, airport se tees se paintees minute, aur Yelahanka se paintees minute."
     },
     "possession": {
       "en": "Possession is planned for December 2029, with phased delivery.",
@@ -493,6 +497,10 @@
     "rate": {
       "en": "As listed online, it works out to roughly seventy-seven hundred rupees per square foot; our Property Expert will confirm the exact plot price.",
       "hi": "Online listing ke hisaab se lagbhag seventy-seven hundred rupees per square foot padta hai; exact plot price hamare Property Expert confirm karenge."
+    },
+    "advantages": {
+      "en": "It sits in a fast-growing industrial corridor of Bengaluru Rural, with clean air, scenic hill views, and growth driven by the airport and the STRR expressway.",
+      "hi": "Yeh Bengaluru Rural ke tezi se badhte industrial corridor mein hai, saaf hawa, pahadon ke sundar nazare, aur airport aur STRR expressway se growth ke saath."
     }
   },
   "nextQuestion": {

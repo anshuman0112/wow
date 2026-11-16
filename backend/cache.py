@@ -73,7 +73,7 @@ async def get_lead(http: httpx.AsyncClient, lead_id: str) -> dict | None:
 
 
 FAQ_TTL = 60 * 60 * 24 * 30     # answers come from campaign facts; bump FAQ_VERSION when facts change
-FAQ_VERSION = "v4"
+FAQ_VERSION = "v5"
 
 
 async def get_faq(http: httpx.AsyncClient, intent: str, lang: str) -> str | None:

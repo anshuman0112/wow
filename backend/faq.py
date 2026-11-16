@@ -31,6 +31,7 @@ INTENTS: dict[str, str] = {
                   r"move in|keys)\b",
     "rera": r"\b(rera|approvals?|legal|registered|registration)\b",
     "payment": r"\b(emi|loan|loans|payment plan|installments?|discount|discounts|offer|offers)\b",
+    "advantages": r"\b(advantages?|benefits?|usp|why (this|here|should i|buy)|appreciation|growth|investment potential)\b",
 }
 QUESTION = r"(\?|\b(what|which|how|where|when|is there|are there|tell me|tell|details|any|know|info|information|explain|share|" \
            r"kya|kitna|kitne|kahan|kab|batao|bataiye|batayiye|jaankari)\b)"
@@ -504,7 +505,7 @@ WEB_TOPICS = {
     "work": r"\b(tech parks?|it parks?|it hub|aerospace park|sez|foxconn|offices nearby)\b",
     "leisure": r"\b(golf|lakes?|trek\w*|wineries|vineyards?|tourist|picnic|waterfalls?)\b",
     "weather": r"\b(weather|temperature|climate|rain(fall)?)\b",
-    "growth": r"\b(appreciation|development plans?|upcoming (projects?|infrastructure)|news|future growth)\b",
+    "growth": r"\b(development plans?|upcoming (projects?|infrastructure)|news)\b",
 }
 DISTANCE = r"\b(how far|distance|kitni door|kitna door|kitna dur|kitni dur|travel time|commute|how long (does|will|would) it take|drive (from|to))\b"
 
