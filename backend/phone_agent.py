@@ -425,7 +425,7 @@ VOICEMAIL = re.compile(r"person you('| a)?re (trying to )?(reach|call)|record yo
                        r"finished recording|number you have dialled|number you have dialed", re.I)
 
 DUPLICATE_WINDOW_S = 1.0   # same words again within 1 s = a delivery copy (retries arrive within ms; a real answer takes seconds)
-REPLY_BUDGET_S = 3.2   # max time we let the AI think on a live call before falling back to the script
+REPLY_BUDGET_S = 2.5   # max time we let the AI think on a live call before falling back to the script
 REPLY_MAX_TOKENS = 250  # replies are 1-2 sentences (+ a little reasoning); a smaller cap also uses less of the free per-minute quota
 HISTORY_WINDOW = 12   # last ~6 exchanges: enough context, bounded token cost on long calls
 
@@ -733,11 +733,6 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
                    "_usage": {"model": "reply-cache+redis", "prompt_tokens": 0, "completion_tokens": 0}}
         else:
             out = await think(groq, messages, name, location, lang)
-            if str((out.get("_usage") or {}).get("model", "")).startswith("gemini:") and out.get("reply") and not out.get("end"):
-                # Backup AI: keep its short acknowledgement/answer, but the next question always comes from the script
-                # (added below), so the 4 checkpoints stay in order.
-                parts = re.split(r"(?<=[.!?])\s+", str(out["reply"]).strip())
-                out["reply"] = " ".join(p for p in parts if not p.rstrip().endswith("?")) or "Understood."
             q = str(out.get("search") or "").strip()
             if q and not re.search(r"\b(price|cost|emi|loan|discount|returns?|roi|availab)", q.lower()):
                 words = " ".join(sorted(set(re.findall(r"[a-z0-9]+", q.lower()))))
