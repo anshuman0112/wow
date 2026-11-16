@@ -123,6 +123,11 @@ async def verify_number(http: httpx.AsyncClient, raw_phone: str, name: str, loca
     try:
         code = await tw.start_verification(phone, name)
     except Exception as e:
+        if "10002" in str(e) or "not supported on trial" in str(e).lower():
+            # Newer Twilio trials can't place verification calls from an app, only from the Twilio console.
+            raise CallError("This Twilio trial can't verify new numbers from the app. The account owner can add it in the "
+                            "Twilio console (Phone Numbers → Verified Caller IDs), then press Verify again. Or try "
+                            "“Talk to Divya” to speak with her in the browser right now.") from e
         raise CallError(f"Twilio could not start verification: {str(e)[:160]}") from e
     return {"verified": False, "phone": phone, "lead_id": lead_id, "code": code}
 
