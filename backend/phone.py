@@ -107,6 +107,7 @@ async def verify_number(http: httpx.AsyncClient, raw_phone: str, name: str, loca
     rows = await sb.select("leads", {"select": "id", "phone": f"eq.{phone}"})
     lead_id = rows[0]["id"] if rows else None
     if await tw.is_verified(phone):
+        await _unpark(sb, phone)
         return {"verified": True, "phone": phone, "lead_id": lead_id}
     # Each verification makes Twilio ring the number: limit it (per number and overall) to stop abuse.
     if cache.enabled():
@@ -129,4 +130,15 @@ async def verify_number(http: httpx.AsyncClient, raw_phone: str, name: str, loca
 async def is_verified(http: httpx.AsyncClient, raw_phone: str) -> bool:
     from .leads import normalise_phone
     phone = normalise_phone(raw_phone)
-    return bool(phone) and await Twilio(http).is_verified(phone)
+    ok = bool(phone) and await Twilio(http).is_verified(phone)
+    if ok:
+        await _unpark(Supabase(http), phone)
+    return ok
+
+
+async def _unpark(sb: Supabase, phone: str) -> None:
+    """A number that just got verified: if its first automatic call had failed for that reason, put it back in
+    line now (the scheduler calls it within a minute, in calling hours) instead of waiting 30 days."""
+    from datetime import datetime, timezone
+    await sb.update("leads", {"phone": f"eq.{phone}", "status": "eq.new", "callback_note": "like.automatic call failed*"},
+                    {"next_call_at": datetime.now(timezone.utc).isoformat(), "callback_note": "verified: calling automatically"})

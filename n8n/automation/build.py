@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 
 APP = "https://vaani-divyasree.vercel.app"
+# The Gmail SMTP login saved in this n8n (Credentials page). Its id is set by n8n when the login is created.
+SMTP_ID, SMTP_NAME = "ZpWDlbWbbEsN0Dha", "SMTP account"
 HERE = Path(__file__).parent
 
 
@@ -32,7 +34,7 @@ def email(name: str, subject: str, text: str, pos: list[int]) -> dict:
     return {"parameters": {"fromEmail": "={{ $env.ALERT_FROM_EMAIL }}", "toEmail": "={{ $env.ALERT_EMAIL }}",
                            "subject": subject, "emailFormat": "text", "text": text, "options": {}},
             "name": name, "type": "n8n-nodes-base.emailSend", "typeVersion": 2.1, "position": pos, "id": "email",
-            "credentials": {"smtp": {"id": "wowGmailSmtp0001", "name": "Gmail SMTP"}}}
+            "credentials": {"smtp": {"id": SMTP_ID, "name": SMTP_NAME}}}
 
 
 def workflow(wid: str, name: str, nodes: list[dict]) -> dict:

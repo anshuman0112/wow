@@ -54,8 +54,8 @@
       "id": "email",
       "credentials": {
         "smtp": {
-          "id": "wowGmailSmtp0001",
-          "name": "Gmail SMTP"
+          "id": "ZpWDlbWbbEsN0Dha",
+          "name": "SMTP account"
         }
       }
     }
