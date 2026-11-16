@@ -59,7 +59,8 @@ p { margin: 0; }
 
 /* Layout */
 .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-.sidebar { position: sticky; top: 0; height: 100vh; padding: 20px 14px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 18px; }
+.sidebar { position: sticky; top: 0; height: 100vh; padding: 20px 14px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 18px; overflow-y: auto; overscroll-behavior: contain; }
+.sidebar > * { flex-shrink: 0; }   /* items keep their size; the sidebar scrolls instead of squashing them */
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
 .brand-mark { width: 32px; height: 32px; border-radius: 9px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; }
 .brand-name { font-weight: 700; font-size: 16px; }

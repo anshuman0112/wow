@@ -15,6 +15,16 @@ export function verifyPanel() {
       <div style="font-size:34px;font-weight:700;letter-spacing:8px;margin:10px 0" class="mono">${esc(s.code)}</div>
       <p class="muted small">Waiting for confirmation… this page updates by itself.</p>
       <button class="btn btn-ghost" data-v="reset">Cancel</button>`;
+  } else if (s.stage === 'manual') {
+    body = `
+      <p>Thanks, <b>${esc(s.phone)}</b> is saved. This free demo can only ring numbers approved in the Twilio account,
+      and approving new numbers from here isn't allowed on this trial, so the owner approves it once in the Twilio console.
+      As soon as it's approved, press <b>Check again</b> and Divya calls you.</p>
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+        <a class="btn btn-primary" href="#/talk">${icon('mic')}<span>Talk to Divya in the browser now</span></a>
+        <button class="btn" data-v="again" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Checking…' : 'Check again'}</button>
+        <button class="btn btn-ghost" data-v="reset">Use another number</button>
+      </div>`;
   } else if (s.stage === 'done') {
     body = `
       <p>✅ <b>${esc(s.phone)}</b> can receive calls from Divya.</p>
@@ -34,8 +44,8 @@ export function verifyPanel() {
   return `
     <section class="card" style="margin-bottom:16px">
       <div class="card-head"><div><h2>Want Divya to call you?</h2>
-        <p class="muted small">This demo runs on Twilio's free trial, which can only call verified numbers.
-        Verify yours once (about 30 seconds): Twilio rings you and you type a 6-digit code.</p></div></div>
+        <p class="muted small">This demo runs on Twilio's free trial, which can only call approved numbers.
+        Enter yours: if it's approved, Divya calls you right away; if not, we'll tell you the next step.</p></div></div>
       <div class="card-pad">${body}
         ${s.err ? `<p class="small" style="color:var(--bad);margin-top:8px">${esc(s.err)}</p>` : ''}</div>
     </section>`;
@@ -53,14 +63,24 @@ export function bindVerifyPanel(el, redraw, onLeadAdded) {
         body: JSON.stringify({ phone: f.phone || '', name: f.name || '', location: f.location || '' }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.detail || 'Could not start verification');
-      Object.assign(s, { phone: j.phone, leadId: j.lead_id, code: j.code || '', stage: j.verified ? 'done' : 'code' });
+      Object.assign(s, { phone: j.phone, leadId: j.lead_id, code: j.code || '',
+                         stage: j.verified ? 'done' : (j.manual ? 'manual' : 'code') });
       await onLeadAdded();
-      if (!j.verified) startPolling(redraw);
+      if (!j.verified && !j.manual) startPolling(redraw);
     } catch (ex) { s.err = ex.message; }
     s.busy = false; redraw();
   };
   el.querySelectorAll('[data-v]').forEach(b => b.onclick = async () => {
     if (b.dataset.v === 'reset') { stopPolling(); Object.assign(s, { stage: 'form', code: '', err: '' }); redraw(); }
+    if (b.dataset.v === 'again') {
+      s.busy = true; s.err = ''; redraw();
+      try {
+        const j = await (await fetch(`${config.apiBaseUrl}/phone/verify?phone=${encodeURIComponent(s.phone)}`)).json();
+        if (j.verified) { s.stage = 'done'; toast('Approved! Press "Call me now".'); }
+        else s.err = 'Not approved yet. Ask the owner to add it in the Twilio console, then check again.';
+      } catch { s.err = 'Could not check right now. Please try again.'; }
+      s.busy = false; redraw();
+    }
     if (b.dataset.v === 'call') {
       s.busy = true; s.err = ''; redraw();
       try {
