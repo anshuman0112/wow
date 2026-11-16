@@ -1,6 +1,7 @@
 # Automatic call-backs: every ~5 minutes, ask the backend to dial leads whose call-back time has come.
 # Free on public repositories. GitHub may delay scheduled runs by a few minutes under load.
 # The endpoint only dials leads that are due (max 3 per run, 9 am - 9 pm IST), so extra runs are harmless.
+# It sends the shared key (repository secret DIALER_KEY = DIALER_SECRET on the server); n8n on the laptop runs the same check every minute.
 name: Call-backs
 
 on:
