@@ -226,6 +226,13 @@ class Groq:
 
     last_usage: dict | None = None
 
+    async def warm(self) -> None:
+        """Open the connection to Groq before the first AI turn (saves the ~0.4 s TLS handshake on that turn)."""
+        try:
+            await self.http.get("https://api.groq.com/openai/v1/models", headers=self.h, timeout=httpx.Timeout(4.0, connect=3.0))
+        except httpx.HTTPError:
+            pass
+
     # Groq's built-in web search (the "browser_search" tool of the gpt-oss models). Measured: 6-12 s per search,
     # so on calls it is used only for questions the fact list can't answer, behind a "let me quickly check".
     WEB_MODELS = ("openai/gpt-oss-20b", "openai/gpt-oss-120b")

@@ -250,6 +250,7 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number:
         rows = await sb.select("leads", {"select": "id,name,phone,location", "id": f"eq.{lead_id}"})
         lead = rows[0] if rows else {}
     hello = greeting(lead.get("name"), callback)
+    _later(Groq(http).warm())   # the lead is listening to the greeting: get the Groq connection ready meanwhile
     from . import voices
     voice = (voice_override if voice_override and voices.valid(voice_override) else None)         or lead.get("voice") or await voices.selected(http)   # chosen in the dashboard
     stt = stt if stt in STT_PRESETS else stt_preset()
