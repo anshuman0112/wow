@@ -634,8 +634,18 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
         # A natural acknowledgement before the facts, rotated so it never sounds repetitive.
         opener = (["Sure.", "Of course.", "Good question.", "Absolutely."] if lang == "en"
                   else ["Zaroor.", "Bilkul.", "Achha sawaal hai."])[len(messages) // 2 % (4 if lang == "en" else 3)]
+        low = speech.lower()
+        # "nearby school" is about schools only: don't also read out hospitals (and the other way round)
+        if {"schools", "hospitals"} <= set(intents):
+            sch = re.search(r"(schools?|colleges?|education|universit)", low)
+            hos = re.search(r"(hospitals?|clinics?|medical|health|doctors?)", low)
+            if sch and not hos:
+                intents = [i for i in intents if i != "hospitals"]
+            elif hos and not sch:
+                intents = [i for i in intents if i != "schools"]
         short = faq.one_place(speech, lang) if "location" in intents else None
-        body = (" ".join(x for x in (faq.answer([i for i in intents if i != "location"], lang, cached), short) if x)
+        # The place they asked about comes FIRST, so it is heard even if they start talking again.
+        body = (" ".join(x for x in (short, faq.answer([i for i in intents if i != "location"], lang, cached)) if x)
                 if short else faq.answer(intents, lang, cached))
         reply = f"{opener} {body} {nxt}"
         return {"reply": reply, "end": False, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),

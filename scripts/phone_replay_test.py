@@ -45,6 +45,10 @@ async def main() -> None:
         x = await lead("Yes. And can you please tell me how far is Nandi Hills?")
         check("fifteen minutes" in x and "railway" not in x.lower() and "yelahanka" not in x.lower(),
               "'how far is Nandi Hills?' -> just Nandi Hills", says(x)[:160])
+        x = await lead("Yes. It do work. And can you tell me the nearby school and how far is Nandi Hills?")
+        said = says(x)
+        check(said.find("fifteen minutes") != -1 and said.find("fifteen minutes") < said.find("GITAM") and "Columbia" not in said,
+              "'nearby school and how far is Nandi Hills?' -> Nandi Hills first, then schools only", said[:200])
         await lead("No. No one will be the part of this decision. But can you tell me and help me with the EMI and loan process?")
         x = await lead("Tomorrow, I")
         check("what time" in x.lower() and "<Hangup" not in x, "'Tomorrow, I…' -> asks for the time", says(x)[:120])
