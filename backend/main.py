@@ -625,6 +625,14 @@ async def phone_turn(request: Request, lead: str = Query(default="", max_length=
                                        form.get("SpeechResult", ""), bool(silence)))
 
 
+@app.post("/api/phone/search")
+async def phone_search(request: Request, lead: str = Query(default="", max_length=64),
+                       http: httpx.AsyncClient = Depends(http_client)):
+    """Right after Divya says "let me quickly check": Groq searches the web, Divya answers and carries on."""
+    form = await twilio_form(request)
+    return _xml(await phone_agent.web_turn(http, form.get("CallSid", ""), _uuid_or_blank(lead)))
+
+
 @app.post("/api/phone/partial")
 async def phone_partial(request: Request, lead: str = Query(default="", max_length=64),
                         http: httpx.AsyncClient = Depends(http_client)):

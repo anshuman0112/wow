@@ -77,7 +77,9 @@ def correct_words(text: str) -> str:
     import difflib
     t = " " + text.lower() + " "
     for wrong, right in SPOKEN_FIXES.items():
-        t = re.sub(rf"\b{re.escape(wrong)}\b", right, t)
+        # "railway station" / "metro station" are places, not a misheard "possession"
+        guard = r"(?<!railway )(?<!metro )(?<!train )(?<!bus )(?<!police )(?<!petrol )" if wrong == "station" else ""
+        t = re.sub(rf"{guard}\b{re.escape(wrong)}\b", right, t)
     out = []
     for w in t.split():
         core = re.sub(r"[^a-z']", "", w)
@@ -478,3 +480,52 @@ def guard(reply: str, messages: list[dict], lang: str) -> str:
         # The PDF requires the pitch before the CTA.
         r = _questions()["pitch"][lang]
     return r
+
+
+# ── Questions answered by a live web search (places and things that are not in the fact list) ──────
+# "How far is BTM Layout?", "Any malls nearby?", "Is there a metro?" -> Divya says "Let me quickly check"
+# and Groq searches the web. Airport / Nandi Hills / STRR / railway / Yelahanka distances are already facts.
+AREAS = ["btm layout", "btm", "koramangala", "hsr layout", "hsr", "indiranagar", "whitefield", "electronic city",
+         "mg road", "majestic", "hebbal", "yelahanka", "jayanagar", "jp nagar", "marathahalli", "manyata",
+         "rt nagar", "malleshwaram", "banashankari", "bellandur", "sarjapur", "kr puram", "yeshwanthpur",
+         "devanahalli", "chikkaballapur", "chikballapur", "doddaballapura", "doddaballapur", "hoskote", "tumkur", "mysore", "hosur", "chennai",
+         "rajajinagar", "basavanagudi", "ulsoor", "frazer town", "kalyan nagar", "hennur", "thanisandra",
+         "jakkur", "sahakar nagar", "vidyaranyapura", "peenya", "nelamangala", "bannerghatta", "city centre",
+         "city center", "bangalore city", "bengaluru city", "cubbon park", "vidhana soudha", "kia", "embassy"]
+KNOWN_PLACES = r"\b(airport|kia|kempegowda|nandi|foothills?|strr|ring road|railway|train station|yelahanka|project|site|plot)\b"
+WEB_TOPICS = {
+    "malls": r"\b(malls?|shopping|multiplex|cinemas?|movie theat(re|er)s?|pvr|inox)\b",
+    "restaurants": r"\b(restaurants?|cafes?|eateries|food court|dhabas?)\b",
+    "hotels": r"\b(hotels?|resorts?)\b",
+    "metro": r"\b(metro)\b",
+    "bus": r"\b(bus|buses|bus stand|bus stop)\b",
+    "worship": r"\b(temples?|church(es)?|mosques?|masjid|mandir|gurudwara)\b",
+    "shops": r"\b(supermarkets?|grocery|groceries|d ?mart|petrol (pump|bunk)s?|atms?|pharmac(y|ies)|medical shops?)\b",
+    "work": r"\b(tech parks?|it parks?|it hub|aerospace park|sez|foxconn|offices nearby)\b",
+    "leisure": r"\b(golf|lakes?|trek\w*|wineries|vineyards?|tourist|picnic|waterfalls?)\b",
+    "weather": r"\b(weather|temperature|climate|rain(fall)?)\b",
+    "growth": r"\b(appreciation|development plans?|upcoming (projects?|infrastructure)|news|future growth)\b",
+}
+DISTANCE = r"\b(how far|distance|kitni door|kitna door|kitna dur|kitni dur|travel time|commute|how long (does|will|would) it take|drive (from|to))\b"
+
+
+def needs_search(utterance: str) -> dict | None:
+    """A question about the area that the fact list can't answer -> {"q": what to search, "key": cache key}."""
+    u = " " + re.sub(r"[^a-z0-9 ?']", " ", (utterance or "").lower()) + " "
+    if not (re.search(QUESTION, u) or "?" in (utterance or "")):
+        return None
+    if re.search(r"\b(price|cost|emi|loan|discount|returns?|roi)\b", u) and not re.search(DISTANCE, u):
+        return None   # money questions: facts / the Property Expert, never the web
+    places = [a for a in AREAS if re.search(rf"\b{re.escape(a)}\b", u)]
+    places = [p for p in places if not any(p != o and p in o for o in places)]   # "btm" inside "btm layout"
+    topics = [t for t, pat in WEB_TOPICS.items() if re.search(pat, u)]
+    if re.search(DISTANCE, u) and not places:
+        m = re.search(r"\b(?:from|to|till|se|and)\s+(?:the\s+|my\s+)?([a-z][a-z ]{2,30}?)(?=\s*(?:\?|$| is| se| and| from| to| for| by))", u)
+        place = (m.group(1).strip() if m else "")
+        if place and not re.search(KNOWN_PLACES, place) and place not in ("here", "there", "it", "this", "that", "you", "me", "there"):
+            places = [place]
+    places = [p for p in places if not re.search(KNOWN_PLACES, p)]
+    if not places and not topics:
+        return None
+    key = "|".join(sorted(f"to:{p}" for p in places) + sorted(topics))
+    return {"q": (utterance or "").strip()[:200], "key": key}

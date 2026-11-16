@@ -226,6 +226,43 @@ class Groq:
 
     last_usage: dict | None = None
 
+    # Groq's built-in web search (the "browser_search" tool of the gpt-oss models). Measured: 6-12 s per search,
+    # so on calls it is used only for questions the fact list can't answer, behind a "let me quickly check".
+    WEB_MODELS = ("openai/gpt-oss-20b", "openai/gpt-oss-120b")
+
+    async def web_search(self, system: str, question: str, budget_s: float = 11.0) -> str:
+        t0 = time.perf_counter()
+        attempts: list[dict] = []
+        for model in self.WEB_MODELS:
+            left = budget_s - (time.perf_counter() - t0)
+            if left < 3:
+                break
+            body = {"model": model, "temperature": 0.2, "max_completion_tokens": 900, "reasoning_effort": "low",
+                    "tools": [{"type": "browser_search"}], "tool_choice": "required",
+                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": question}]}
+            t1 = time.perf_counter()
+            try:
+                r = await self.http.post("https://api.groq.com/openai/v1/chat/completions", json=body, headers=self.h,
+                                         timeout=httpx.Timeout(left, connect=2.0))
+            except httpx.HTTPError as e:
+                attempts.append({"model": model, "status": type(e).__name__, "ms": round((time.perf_counter() - t1) * 1000)})
+                continue
+            attempts.append({"model": model, "status": r.status_code, "ms": round((time.perf_counter() - t1) * 1000)})
+            _note_quota(model, r)
+            if r.status_code != 200:
+                continue
+            try:
+                text = r.json()["choices"][0]["message"].get("content") or ""
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
+            u = r.json().get("usage") or {}
+            self.last_usage = {"model": f"web-search:{model}", "prompt_tokens": u.get("prompt_tokens"),
+                               "completion_tokens": u.get("completion_tokens"), "attempts": attempts}
+            if text.strip():
+                return text
+        self.last_usage = {"model": "web-search:none", "attempts": attempts}
+        return ""
+
     async def stream_text(self, messages: list[dict], max_tokens: int = 250):
         """Word-by-word reply (Server-Sent Events). Yields text pieces as Groq writes them.
         Model choice is quota-aware like chat_json; we only switch model BEFORE the first word arrives."""

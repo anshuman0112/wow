@@ -80,6 +80,7 @@ def _short_fact(v: str) -> str:
 PHONE_RULES = """
 
 PHONE: reply ONLY with JSON {"reply": "...", "end": true|false, "lang": "en"|"hi"}. reply = 1-2 short spoken sentences, English letters only, no symbols. end = true only when finishing (time booked and confirmed, declined twice, don't call, wrong person, goodbye); reply is then the goodbye. lang = "hi" for Hindi/Hinglish. Garbled words -> ask them to repeat.
+Optional "search": "<short web query>" ONLY when the lead asks a factual question about the AREA that FACTS can't answer (distance to another place, malls, metro, restaurants, local developments); reply is then just "Let me quickly check that for you." Never search for price, EMI, discounts, returns or plot availability.
 """
 
 
@@ -374,8 +375,15 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     # can't be inside the record it writes, so the full total is printed to the server log below.
     usage["t_ms"] = {"load": round((t_loaded - t_in) * 1000), "reply": round((t_replied - t_loaded) * 1000),
                      "turn": len(messages) // 2}
-    xml = twiml_goodbye(reply, raw.get("voice")) if end else \
-        twiml_gather(reply, row.get("lead_id") or lead_id, raw["lang"], raw.get("voice"), raw.get("stt"), raw.get("instant", False))
+    if out.get("search") and not end:
+        # "Let me quickly check that for you." is spoken while Twilio fetches /api/phone/search (the web search).
+        raw["search"] = {**out["search"], "lang": raw["lang"]}
+        nxt = escape(f"{settings().public_base_url}/api/phone/search?lead={quote(row.get('lead_id') or lead_id)}")
+        xml = (f'<?xml version="1.0" encoding="UTF-8"?><Response>{says(reply, raw.get("voice"))}'
+               f'<Redirect method="POST">{nxt}</Redirect></Response>')
+    else:
+        xml = twiml_goodbye(reply, raw.get("voice")) if end else \
+            twiml_gather(reply, row.get("lead_id") or lead_id, raw["lang"], raw.get("voice"), raw.get("stt"), raw.get("instant", False))
     if fp:
         raw["last_reply"] = {"fp": fp, "xml": xml, "t": time.time()}
     await asyncio.gather(save_session(http, sb, call_sid, row), cache.set_quota(http))
@@ -423,6 +431,107 @@ def call_memory(messages: list[dict]) -> str:
     return (f"CALL MEMORY: covered = {', '.join(names[k] for k in order if k in done) or 'nothing yet'}; "
             f"still to do = {', '.join(names[k] for k in order if k not in done) or 'close the call'}; "
             f"lead said so far: {said or '-'}. Never ask a covered step again. ")
+
+
+# ── Live web search (Groq browser_search) for questions about the area that the facts can't answer ──
+WEB_FILLER = {"en": "Good question, let me quickly check that for you.", "hi": "Achha sawaal hai, main jaldi se check karti hoon."}
+WEB_FAIL = {"en": "I couldn't confirm that just now, but our Property Expert will share the exact details.",
+            "hi": "Abhi main yeh confirm nahi kar paayi, lekin hamare Property Expert aapko exact details batayenge."}
+WEB_BUDGET_S = 11.0   # Twilio waits up to 15 s for our answer; the filler is already playing
+WEB_CACHE_S = 30 * 24 * 3600   # places don't move: an answer found once is reused for 30 days (instant)
+
+
+def web_system(lang: str) -> str:
+    return ("You help Divya, a phone consultant for Divyasree Developers' Whispers of the Wind: villa plots in Nandi Valley "
+            "at Heggadihalli village, Doddaballapura, Bengaluru Rural 562110, near the Nandi Hills foothills, North Bengaluru. "
+            "Official distances: Kempegowda airport 30-35 min, Nandi Hills foothills 15 min, STRR 10 min, Doddaballapura railway "
+            "station 12 min, Yelahanka 35 min; roads: Doddaballapura Main Road, STRR, NH 44. "
+            "Search the web and answer the buyer's question about the area. Distances and travel times are FROM the project "
+            "by road, rounded (\"about fifty-five kilometres, roughly an hour and a half\"). Nearby means within about 25 km of "
+            "the project; if the nearest option is farther, say so and how far. Name at most two places. "
+            "Reply with ONE or TWO short spoken sentences, at most 40 words: no URLs, citations, lists, brackets or symbols. "
+            "Never talk about prices, EMI, returns or other projects. "
+            + ("Reply in simple Hinglish written in English letters. " if lang == "hi" else "")
+            + "If you cannot find a reliable answer, reply exactly UNKNOWN.")
+
+
+def clean_web(text: str) -> str | None:
+    t = re.sub(r"【[^】]*】|\[[^\]]*\]\([^)]*\)|https?://\S+|\(\s*\)", "", text or "")
+    t = re.sub(r"[*#_`>|]", "", t).replace(" ", " ").replace("‑", "-")
+    t = re.sub(r"\s+", " ", t).strip()
+    if not t or "UNKNOWN" in t.upper()[:40]:
+        return None
+    t = " ".join(re.split(r"(?<=[.!?])\s+", t)[:2]).strip()
+    if t and t[-1] not in ".!?":
+        t += "."
+    return speakable(t) if len(t) > 10 else None
+
+
+def place_answer(key: str, lang: str) -> str | None:
+    """Ready, reviewed answers for the places people ask about most (campaign.json "places"): 0 tokens, 0 waiting."""
+    from .campaign import data
+    out = []
+    for part in key.split("|"):
+        hit = next((p[lang] for p in data().get("places", []) if part in p["keys"]), None)
+        if not hit:
+            return None   # one part unknown -> search the web for the whole question
+        if hit not in out:
+            out.append(hit)
+    return " ".join(out) or None
+
+
+def _web_cache_key(key: str, lang: str) -> str:
+    import hashlib
+    return "web1:" + lang + ":" + hashlib.sha256(key.encode()).hexdigest()[:20]
+
+
+async def cached_web(http: httpx.AsyncClient, key: str, lang: str) -> str | None:
+    try:
+        return await asyncio.wait_for(cache.get_text(http, _web_cache_key(key, lang)), REDIS_WAIT_S)
+    except asyncio.TimeoutError:
+        return None
+
+
+async def web_answer(http: httpx.AsyncClient, search: dict, lang: str, budget_s: float = WEB_BUDGET_S) -> tuple[str | None, dict]:
+    """Search the web with Groq; returns (spoken answer or None, usage). Good answers are cached for 30 days."""
+    groq = Groq(http)
+    t0 = time.perf_counter()
+    try:
+        raw = await asyncio.wait_for(groq.web_search(web_system(lang), search["q"], budget_s), budget_s + 0.5)
+    except asyncio.TimeoutError:
+        raw = ""
+    ans = clean_web(raw)
+    usage = {**(groq.last_usage or {}), "seconds": round(time.perf_counter() - t0, 2), "web": search.get("key")}
+    if ans:
+        await cache.put_text(http, _web_cache_key(search["key"], lang), ans, WEB_CACHE_S)
+    return ans, usage
+
+
+async def web_turn(http: httpx.AsyncClient, call_sid: str, lead_id: str) -> str:
+    """Twilio comes here right after "let me quickly check": search, answer, then carry on with the next question."""
+    sb = Supabase(http)
+    row = await load_session(http, sb, call_sid)
+    if row is None:
+        return twiml_goodbye("Sorry, I lost the line for a moment. I'll call you back shortly. Thank you!")
+    messages, raw = row.setdefault("messages", []), row.setdefault("raw", {})
+    lead = row.get("lead_id") or lead_id
+    search = raw.pop("search", None)
+    lang = (search or {}).get("lang") or raw.get("lang", "en")
+    if not search:   # a repeated fetch: say the last reply again
+        last = next((m["text"] for m in reversed(messages) if m["role"] == "assistant"), "Sorry, could you say that once more?")
+        return twiml_gather(last, lead, lang, raw.get("voice"), raw.get("stt"), raw.get("instant", False))
+    ans, usage = await web_answer(http, search, lang)
+    said = ans or WEB_FAIL[lang]
+    nxt = faq.next_question(messages + [{"role": "assistant", "text": said}], lang)
+    reply = f"{said} {nxt}"
+    if messages and messages[-1]["role"] == "assistant" and messages[-1]["text"] == WEB_FILLER[lang]:
+        messages[-1]["text"] = f"{WEB_FILLER[lang]} {reply}"   # one Divya turn in the transcript
+    else:
+        messages.append({"role": "assistant", "text": reply})
+    raw.setdefault("usage", []).append(usage)
+    await save_session(http, sb, call_sid, row)
+    print(f"[web] call={call_sid[-6:]} {usage}", flush=True)
+    return twiml_gather(reply, lead, lang, raw.get("voice"), raw.get("stt"), raw.get("instant", False))
 
 
 def build_chat(messages: list[dict], name: str | None, location: str | None, lang: str = "en") -> list[dict]:
@@ -486,6 +595,17 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
     if slot:   # the lead chose the Property Expert time: confirm it back exactly and close politely
         return {"reply": slot, "end": True, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
                 "_usage": {"model": "rule:slot-confirm", "prompt_tokens": 0, "completion_tokens": 0}}
+    web = faq.needs_search(speech)
+    if web:   # a question about the area: ready answers first (instant), else Groq searches the web (cached 30 days)
+        hit = place_answer(web["key"], lang) or await cached_web(http, web["key"], lang)
+        if hit:
+            nxt = faq.next_question(messages + [{"role": "assistant", "text": hit}], lang)
+            return {"reply": f"{hit} {nxt}", "end": False, "lang": lang, "_final": True,
+                    "_latency_s": round(time.perf_counter() - t0, 3),
+                    "_usage": {"model": "web-cache+redis", "prompt_tokens": 0, "completion_tokens": 0, "web": web["key"]}}
+        return {"reply": WEB_FILLER[lang], "end": False, "lang": lang, "_final": True, "search": web,
+                "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "web-search:pending", "prompt_tokens": 0, "completion_tokens": 0, "web": web["key"]}}
     objection = faq.budget_objection(messages, lang) or faq.location_objection(messages, lang)
     if objection:   # objections first: "it's too far from my office" must be countered, not answered as a FAQ
         low = objection.lower()
@@ -576,6 +696,13 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
                    "_usage": {"model": "reply-cache+redis", "prompt_tokens": 0, "completion_tokens": 0}}
         else:
             out = await think(groq, messages, name, location, lang)
+            q = str(out.get("search") or "").strip()
+            if q and not re.search(r"\b(price|cost|emi|loan|discount|returns?|roi|availab)", q.lower()):
+                words = " ".join(sorted(set(re.findall(r"[a-z0-9]+", q.lower()))))
+                out.update({"reply": WEB_FILLER[lang], "end": False, "lang": lang,
+                            "search": {"q": f"{speech.strip()} (search: {q})"[:240], "key": ("q:" + words)[:120]}})
+                return out
+            out.pop("search", None)
         if out.get("reply"):   # guardrails apply to cached replies too
             use_lang = "hi" if lang == "hi" else (out.get("lang") or lang)   # the lead's detected Hinglish wins
             out["lang"] = use_lang

@@ -260,6 +260,18 @@
           "k": "Yelahanka",
           "v": "~35 min",
           "src": "web"
+        },
+        {
+          "k": "Railway",
+          "v": "Doddaballapura Railway Station ~12 min"
+        },
+        {
+          "k": "Jobs hub",
+          "v": "Doddaballapura Industrial Hub ~15 min"
+        },
+        {
+          "k": "Roads",
+          "v": "Doddaballapura Main Road, STRR and NH 44"
         }
       ]
     },
@@ -305,6 +317,14 @@
           "k": "Healthcare",
           "v": "Columbia Asia / Manipal network, Doddaballapura Government Hospital",
           "src": "web"
+        },
+        {
+          "k": "Leisure",
+          "v": "Prestige Golfshire and weekend resorts"
+        },
+        {
+          "k": "Daily needs",
+          "v": "Local markets and banks in Doddaballapura"
         }
       ]
     },
@@ -455,8 +475,8 @@
       "hi": "Healthcare ke liye Columbia Asia Manipal network aur Doddaballapura Government Hospital paas mein hain."
     },
     "location": {
-      "en": "It is in Nandi Valley at Heggadihalli, Doddaballapura: about fifteen minutes from the Nandi Hills foothills, ten minutes from the STRR corridor, and thirty to thirty-five minutes from the airport.",
-      "hi": "Yeh Nandi Valley mein Heggadihalli, Doddaballapura mein hai: Nandi Hills foothills se lagbhag pandrah minute, STRR corridor se das minute, aur airport se tees se paintees minute."
+      "en": "It is in Nandi Valley at Heggadihalli, Doddaballapura: about fifteen minutes from the Nandi Hills foothills, ten minutes from the STRR corridor, twelve minutes from Doddaballapura railway station, and thirty to thirty-five minutes from the airport.",
+      "hi": "Yeh Nandi Valley mein Heggadihalli, Doddaballapura mein hai: Nandi Hills foothills se lagbhag pandrah minute, STRR corridor se das minute, Doddaballapura railway station se barah minute, aur airport se tees se paintees minute."
     },
     "possession": {
       "en": "Possession is planned for December 2029, with phased delivery.",
@@ -601,5 +621,138 @@
     "hot_requires": [
       "budget"
     ]
-  }
+  },
+  "places": [
+    {
+      "keys": [
+        "to:btm layout",
+        "to:btm",
+        "to:koramangala",
+        "to:hsr layout",
+        "to:hsr",
+        "to:jayanagar",
+        "to:jp nagar",
+        "to:banashankari",
+        "to:bellandur",
+        "to:sarjapur",
+        "to:bannerghatta",
+        "to:basavanagudi"
+      ],
+      "en": "From south Bengaluru areas like BTM Layout or Koramangala it is about sixty kilometres, roughly one and a half to two hours by road depending on traffic.",
+      "hi": "South Bengaluru, jaise BTM Layout ya Koramangala se, yeh lagbhag saath kilometre hai, traffic ke hisaab se dedh se do ghante."
+    },
+    {
+      "keys": [
+        "to:mg road",
+        "to:majestic",
+        "to:city centre",
+        "to:city center",
+        "to:bangalore city",
+        "to:bengaluru city",
+        "to:cubbon park",
+        "to:vidhana soudha",
+        "to:indiranagar",
+        "to:ulsoor",
+        "to:frazer town",
+        "to:malleshwaram",
+        "to:rajajinagar"
+      ],
+      "en": "From central Bengaluru it is about fifty-five kilometres, roughly one and a half hours by road.",
+      "hi": "Central Bengaluru se yeh lagbhag pachpan kilometre hai, road se takreeban dedh ghanta."
+    },
+    {
+      "keys": [
+        "to:hebbal",
+        "to:manyata",
+        "to:rt nagar",
+        "to:kalyan nagar",
+        "to:hennur",
+        "to:thanisandra",
+        "to:jakkur",
+        "to:sahakar nagar",
+        "to:vidyaranyapura",
+        "to:yeshwanthpur",
+        "to:embassy"
+      ],
+      "en": "From Hebbal and Manyata Tech Park it is about forty to forty-five kilometres, roughly an hour by road.",
+      "hi": "Hebbal aur Manyata Tech Park se yeh lagbhag chaalis se paintaalis kilometre hai, road se takreeban ek ghanta."
+    },
+    {
+      "keys": [
+        "to:whitefield",
+        "to:marathahalli",
+        "to:kr puram",
+        "to:hoskote"
+      ],
+      "en": "From Whitefield it is about sixty kilometres, roughly one and a half hours via the airport road.",
+      "hi": "Whitefield se yeh lagbhag saath kilometre hai, airport road se takreeban dedh ghanta."
+    },
+    {
+      "keys": [
+        "to:electronic city",
+        "to:hosur"
+      ],
+      "en": "From Electronic City it is about seventy-five kilometres, roughly two hours by road.",
+      "hi": "Electronic City se yeh lagbhag pachattar kilometre hai, road se takreeban do ghante."
+    },
+    {
+      "keys": [
+        "to:devanahalli"
+      ],
+      "en": "Devanahalli town is about twenty-five kilometres away, roughly half an hour.",
+      "hi": "Devanahalli town lagbhag pachchees kilometre door hai, takreeban aadha ghanta."
+    },
+    {
+      "keys": [
+        "to:chikkaballapur",
+        "to:chikballapur"
+      ],
+      "en": "Chikkaballapur town is only about fifteen kilometres away, around twenty minutes.",
+      "hi": "Chikkaballapur town sirf pandrah kilometre door hai, lagbhag bees minute."
+    },
+    {
+      "keys": [
+        "to:doddaballapur",
+        "to:doddaballapura"
+      ],
+      "en": "Doddaballapura town is about sixteen kilometres away, around twenty-five minutes, with local markets, banks and the railway station.",
+      "hi": "Doddaballapura town lagbhag solah kilometre door hai, pachchees minute, wahan market, bank aur railway station hai."
+    },
+    {
+      "keys": [
+        "malls"
+      ],
+      "en": "Daily shopping is in Doddaballapura town, about twenty-five minutes away; for big malls, Galleria Mall in Yelahanka is about forty-five minutes and Phoenix Mall of Asia in Hebbal about an hour.",
+      "hi": "Roz ki shopping Doddaballapura town mein hai, lagbhag pachchees minute; bade malls ke liye Yelahanka ka Galleria Mall lagbhag paune ghante aur Hebbal ka Phoenix Mall of Asia lagbhag ek ghante door hai."
+    },
+    {
+      "keys": [
+        "metro"
+      ],
+      "en": "There is no metro near the project yet; the airport metro line being built runs along the airport road, about thirty to thirty-five minutes away, and Doddaballapura railway station is twelve minutes away.",
+      "hi": "Abhi project ke paas metro nahi hai; airport metro line ban rahi hai jo airport road ke saath chalegi, lagbhag tees se paintees minute door, aur Doddaballapura railway station barah minute par hai."
+    },
+    {
+      "keys": [
+        "shops"
+      ],
+      "en": "Supermarkets, pharmacies, banks and fuel stations are in Doddaballapura town, about twenty-five minutes away.",
+      "hi": "Supermarket, medical store, bank aur petrol pump Doddaballapura town mein hain, lagbhag pachchees minute door."
+    },
+    {
+      "keys": [
+        "leisure",
+        "hotels"
+      ],
+      "en": "Nandi Hills is fifteen minutes away for treks and sunrise views, with Prestige Golfshire golf resort and several weekend resorts close by.",
+      "hi": "Nandi Hills sirf pandrah minute door hai, trek aur sunrise ke liye, aur paas mein Prestige Golfshire golf resort aur kai weekend resorts hain."
+    },
+    {
+      "keys": [
+        "work"
+      ],
+      "en": "The Doddaballapura Industrial Hub is about fifteen minutes away, and the aerospace and IT parks near the airport are about thirty-five minutes.",
+      "hi": "Doddaballapura Industrial Hub lagbhag pandrah minute door hai, aur airport ke paas ke aerospace aur IT parks lagbhag paintees minute."
+    }
+  ]
 }
