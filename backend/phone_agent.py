@@ -637,8 +637,8 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
         low = speech.lower()
         # "nearby school" is about schools only: don't also read out hospitals (and the other way round)
         if {"schools", "hospitals"} <= set(intents):
-            sch = re.search(r"(schools?|colleges?|education|universit)", low)
-            hos = re.search(r"(hospitals?|clinics?|medical|health|doctors?)", low)
+            sch = re.search(r"\b(schools?|colleges?|education|universit)", low)
+            hos = re.search(r"\b(hospitals?|clinics?|medical|health|doctors?)", low)
             if sch and not hos:
                 intents = [i for i in intents if i != "hospitals"]
             elif hos and not sch:
@@ -733,7 +733,7 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     reply = speakable(out.get("reply") or "")
     if out.get("end") and reply.rstrip().endswith("?"):
         out["end"] = False   # Divya is still asking something: never hang up on an open question
-    if re.search(r"(i have noted|i've noted|noted (that|it)|will call you (then|tomorrow|today|at|on))", reply.lower())             and not reply.rstrip().endswith("?"):
+    if re.search(r"\b(i have noted|i've noted|noted (that|it)|will call you (then|tomorrow|today|at|on))\b", reply.lower())             and not reply.rstrip().endswith("?"):
         out["end"] = True   # the expert-call time is confirmed: close politely, never ask for the time again
     if reply and "?" not in reply and not out.get("end"):
         reply = f"{reply} {faq.next_question(messages + [{'role': 'assistant', 'text': reply}], out.get('lang') or lang)}"
