@@ -372,7 +372,7 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     messages.append({"role": "user", "text": speech.strip()})
     out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
     t_replied = time.perf_counter()
-    reply = (out.get("reply") or "Sorry, could you say that once more?").strip()[:600]
+    reply = clip_reply(out.get("reply") or "Sorry, could you say that once more?")
     end = bool(out.get("end")) or len(messages) >= MAX_TURNS * 2
     raw.update({"lang": out.get("lang", raw.get("lang", "en")), "silences": 0})
     usage = dict(out.get("_usage") or {})
@@ -541,6 +541,16 @@ async def web_turn(http: httpx.AsyncClient, call_sid: str, lead_id: str) -> str:
     await save_session(http, sb, call_sid, row)
     print(f"[web] call={call_sid[-6:]} {usage}", flush=True)
     return twiml_gather(reply, lead, lang, raw.get("voice"), raw.get("stt"), raw.get("instant", False))
+
+
+def clip_reply(text: str, limit: int = 1200) -> str:
+    """Safety cap on reply length that never cuts mid-sentence (several questions at once make long answers)."""
+    t = text.strip()
+    if len(t) <= limit:
+        return t
+    cut = t[:limit]
+    end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
+    return cut[:end + 1] if end > 200 else cut
 
 
 def build_chat(messages: list[dict], name: str | None, location: str | None, lang: str = "en") -> list[dict]:
@@ -808,7 +818,7 @@ async def partial(http: httpx.AsyncClient, call_sid: str, lead_id: str, heard: s
     messages.append({"role": "user", "text": (heard or "").strip() or said.capitalize() + "."})
     raw["instant_last"] = {"n": n, "words": " ".join(words), "t": time.time()}
     out = await respond(groq, messages, row.get("name"), raw.get("location"), raw.get("lang", "en"))
-    reply = (out.get("reply") or "Sorry, could you say that once more?").strip()[:600]
+    reply = clip_reply(out.get("reply") or "Sorry, could you say that once more?")
     end = bool(out.get("end"))
     raw.update({"lang": out.get("lang", raw.get("lang", "en")), "silences": 0})
     usage = dict(out.get("_usage") or {})
