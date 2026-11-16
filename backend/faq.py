@@ -400,8 +400,25 @@ def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     return f"Perfect, maine {slot} Property Expert ki call ke liye note kar liya hai. {extra}Dhanyavaad, aapka din shubh ho!"
 
 
+# A question cut off before its topic ("But can you tell me", "And what about the"): the phone stopped listening
+# when the lead paused. Ask them to go on; never guess an answer.
+CUT_QUESTION = re.compile(r"\b(tell me|tell me about|can you|could you|can you please|please|what about|what is|what are|"
+                          r"how about|how|what|which|where|when|about|and|but|the|is there|are there|batao|bataiye|kya)\s*[,.]?\s*$",
+                          re.I)
+
+
+def go_ahead(messages: list[dict], lang: str) -> str | None:
+    last = (messages[-1]["text"] if messages and messages[-1]["role"] == "user" else "").strip()
+    if not last or detect(last) or not CUT_QUESTION.search(last) or SLOT.search(last):
+        return None
+    return "Sure, go ahead. What would you like to know?" if lang == "en" else "Haan ji, boliye. Aap kya jaanna chahenge?"
+
+
 def fallback_reply(messages: list[dict], lang: str) -> str:
     """Used only if every LLM attempt fails (e.g. free-tier rate limit) — never 'say that once more'."""
+    cut = go_ahead(messages, lang)
+    if cut:
+        return cut
     last = (messages[-1]["text"] if messages and messages[-1]["role"] == "user" else "").lower()
     if re.search(r"not interested|don'?t call|no thanks|nahi chahiye", last):
         return "Completely understood. Thank you for your time, and have a lovely day!" if lang == "en" else \

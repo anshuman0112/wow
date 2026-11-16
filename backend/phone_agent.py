@@ -614,6 +614,10 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
     if slot:   # the lead chose the Property Expert time: confirm it back exactly and close politely
         return {"reply": slot, "end": True, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
                 "_usage": {"model": "rule:slot-confirm", "prompt_tokens": 0, "completion_tokens": 0}}
+    cut = faq.go_ahead(messages, lang)
+    if cut:   # "But can you tell me…" (cut off by a pause): let them finish the question, no AI needed
+        return {"reply": cut, "end": False, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "rule:go-ahead", "prompt_tokens": 0, "completion_tokens": 0}}
     web = faq.needs_search(speech)
     if web:   # a question about the area: ready answers first (instant), else Groq searches the web (cached 30 days)
         hit = place_answer(web["key"], lang) or await cached_web(http, web["key"], lang)
