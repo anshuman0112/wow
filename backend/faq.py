@@ -18,7 +18,7 @@ def _questions() -> dict:
 
 INTENTS: dict[str, str] = {
     "rate": r"\b(per (sq|square)|sq ?ft rate|rate per|per sqft|psf)\b",
-    "price": r"\b(price|pricing|cost|rate|kitna|kitne|kitni|kimat|keemat|daam|starting|how much)\b",
+    "price": r"\b(price|pricing|cost|rate|kitna|kitne|kitni|kimat|keemat|daam|starting|how much)\b(?!\s+(door|dur|time|der|minute))",
     "size": r"\b(size|sizes|sq ?ft|square (feet|foot)|acre|acres|how big|kitna bada)\b",
     "amenities": r"\b(amenit\w*|facilit\w*|clubhouse|club house|pool|gym|sports|parks?|features)\b",
     "schools": r"\b(schools?|colleges?|education|university|near ?by|surrounding)\b",
@@ -325,7 +325,7 @@ def location_objection(messages: list[dict], lang: str) -> str | None:
 SLOT = re.compile(
     r"\b((today|tomorrow|kal|parso|monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
     r"(\s+(morning|evening|afternoon|night|subah|shaam|dopahar|raat))?"
-    r"(\s+(at\s+)?\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.|baje)?)?"
+    r"(\s+((?:at|around|by|about|after|before)\s+)*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.|baje)?)?"
     r"(\s+(saat|aath|nau|das|gyarah|barah|ek|do|teen|chaar|paanch|chhe)\s+baje)?)", re.I)
 
 
@@ -339,6 +339,7 @@ def _complete_slot(slot: str, said: str) -> str:
         part = re.search(r"\b(morning|afternoon|evening|night|subah|dopahar|shaam|raat)\b", said, re.I)
         if part and part.group(1).lower() not in slot.lower():
             slot = f"{slot} {part.group(1).lower()}"
+    slot = re.sub(r"\b(Around|At|By|About|After|Before)\b", lambda x: x.group(1).lower(), slot)
     return re.sub(r"^(Tomorrow|Today)\b", lambda x: x.group(1).lower(), slot)
 
 
@@ -382,7 +383,8 @@ def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     if not m:
         return None
     prev = prev_raw.lower()
-    asked_slot = re.search(r"(day|time|kab|kaunsa din|when)", prev) and "expert" in prev
+    # "Sure, tomorrow. What time would suit you?" is the expert-call question too (it just doesn't say "expert")
+    asked_slot = (re.search(r"(day|time|kab|kaunsa din|when)", prev) and "expert" in prev) or bool(follow)
     has_time = bool(m.group(3) or m.group(5) or m.group(9))   # a day AND a time = an appointment
     if not ("expert" in low or asked_slot or has_time):
         return None
@@ -533,3 +535,31 @@ def needs_search(utterance: str) -> dict | None:
         return None
     key = "|".join(sorted(f"to:{p}" for p in places) + sorted(topics))
     return {"q": (utterance or "").strip()[:200], "key": key}
+
+
+# "How far is Nandi Hills?" asks about ONE place: answer just that one, not the whole location list.
+ONE_PLACE = [
+    (r"\bnandi\b", "Nandi Hills foothills are just about fifteen minutes from the project.",
+     "Nandi Hills foothills project se sirf pandrah minute door hain."),
+    (r"\b(airport|kia|kempegowda)\b", "Kempegowda International Airport is about thirty to thirty-five minutes away.",
+     "Kempegowda International Airport lagbhag tees se paintees minute door hai."),
+    (r"\b(railway|train)\b", "Doddaballapura railway station is about twelve minutes away.",
+     "Doddaballapura railway station lagbhag barah minute door hai."),
+    (r"\b(strr|ring road|expressway)\b", "The STRR expressway corridor is about ten minutes away.",
+     "STRR expressway corridor lagbhag das minute door hai."),
+    (r"\byelahanka\b", "Yelahanka city centre is about thirty-five minutes away.",
+     "Yelahanka city centre lagbhag paintees minute door hai."),
+    (r"\bindustrial\b", "The Doddaballapura Industrial Hub is about fifteen minutes away.",
+     "Doddaballapura Industrial Hub lagbhag pandrah minute door hai."),
+]
+
+
+def one_place(utterance: str, lang: str) -> str | None:
+    """Short answer when the lead asks how far ONE known place is; None for general location questions."""
+    u = (utterance or "").lower()
+    if not re.search(DISTANCE + r"|\b(near|close|minutes?|kitna time)\b", u):
+        return None
+    hits = [(en, hi) for pat, en, hi in ONE_PLACE if re.search(pat, u)]
+    if not hits or len(hits) > 2:
+        return None
+    return " ".join(h[0] if lang == "en" else h[1] for h in hits)

@@ -634,7 +634,10 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
         # A natural acknowledgement before the facts, rotated so it never sounds repetitive.
         opener = (["Sure.", "Of course.", "Good question.", "Absolutely."] if lang == "en"
                   else ["Zaroor.", "Bilkul.", "Achha sawaal hai."])[len(messages) // 2 % (4 if lang == "en" else 3)]
-        reply = f"{opener} {faq.answer(intents, lang, cached)} {nxt}"
+        short = faq.one_place(speech, lang) if "location" in intents else None
+        body = (" ".join(x for x in (faq.answer([i for i in intents if i != "location"], lang, cached), short) if x)
+                if short else faq.answer(intents, lang, cached))
+        reply = f"{opener} {body} {nxt}"
         return {"reply": reply, "end": False, "lang": lang, "_latency_s": round(time.perf_counter() - t0, 3),
                 "_usage": {"model": "faq-cache" + ("+redis" if cache.fast_enough() else ""), "prompt_tokens": 0,
                            "completion_tokens": 0, "intents": intents, "redis_hits": len(cached)}}
@@ -720,6 +723,8 @@ async def respond(groq: Groq, messages: list[dict], name: str | None, location: 
     reply = speakable(out.get("reply") or "")
     if out.get("end") and reply.rstrip().endswith("?"):
         out["end"] = False   # Divya is still asking something: never hang up on an open question
+    if re.search(r"(i have noted|i've noted|noted (that|it)|will call you (then|tomorrow|today|at|on))", reply.lower())             and not reply.rstrip().endswith("?"):
+        out["end"] = True   # the expert-call time is confirmed: close politely, never ask for the time again
     if reply and "?" not in reply and not out.get("end"):
         reply = f"{reply} {faq.next_question(messages + [{'role': 'assistant', 'text': reply}], out.get('lang') or lang)}"
     if re.search(r"have a lovely day|din shubh ho", reply.lower()) and not reply.rstrip().endswith("?"):
