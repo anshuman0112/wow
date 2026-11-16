@@ -520,9 +520,12 @@ def needs_search(utterance: str) -> dict | None:
     places = [p for p in places if not any(p != o and p in o for o in places)]   # "btm" inside "btm layout"
     topics = [t for t, pat in WEB_TOPICS.items() if re.search(pat, u)]
     if re.search(DISTANCE, u) and not places:
-        m = re.search(r"\b(?:from|to|till|se|and)\s+(?:the\s+|my\s+)?([a-z][a-z ]{2,30}?)(?=\s*(?:\?|$| is| se| and| from| to| for| by))", u)
+        m = re.search(r"\b(?:from|to|till|se)\s+(?:the\s+|my\s+)?([a-z][a-z ]{2,30}?)(?=\s*(?:\?|$| is| se| and| from| to| for| by))", u)
         place = (m.group(1).strip() if m else "")
-        if place and not re.search(KNOWN_PLACES, place) and place not in ("here", "there", "it", "this", "that", "you", "me", "there"):
+        # Not a place: question words, or topics the facts already answer ("schools, colleges, and how far").
+        not_place = r"\b(how|far|what|which|where|here|there|it|this|that|you|me|nearest|school|schools|college|colleges|" \
+                    r"hospitals?|clinics?|amenit\w*|club\w*|price|plots?|possession)\b"
+        if place and not re.search(KNOWN_PLACES, place) and not re.search(not_place, place):
             places = [place]
     places = [p for p in places if not re.search(KNOWN_PLACES, p)]
     if not places and not topics:

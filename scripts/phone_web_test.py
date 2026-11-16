@@ -68,7 +68,9 @@ async def main() -> None:
                   "same question again -> instant answer from the cache", f"{sec}s {says(x)[:120]}")
         for q, must, label in [("How far is the airport?", "airport", "airport -> fact answer, no web search"),
                                ("How far is the railway station?", "railway", "railway station -> fact answer (not possession)"),
-                               ("What is the EMI?", "", "EMI -> never searched on the web")]:
+                               ("What is the EMI?", "", "EMI -> never searched on the web"),
+                               ("School, colleges, and how far", "gitam", "cut-off 'schools, colleges, how far' -> schools and colleges answer"),
+                               ("Give me nearby school, college and hospital.", "hospital", "schools + colleges + hospitals -> all answered")]:
             st, x, sec = await lead(q)
             check(st == 200 and "check that" not in x and must in x.lower() and "<Gather" in x, label, f"{sec}s {says(x)[:120]}")
 
