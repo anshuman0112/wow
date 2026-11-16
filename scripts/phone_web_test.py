@@ -52,7 +52,7 @@ async def main() -> None:
             st, x, sec = await lead(q)
             check(st == 200 and must in x.lower() and "check that" not in x and "<Gather" in x,
                   f"{q!r} -> ready answer, no waiting", f"{sec}s {says(x)[:150]}")
-        for q in ("Are there any good restaurants nearby?",):
+        for q in ("How far is Mysore Palace from here?",):
             st, x, sec = await lead(q)
             redirect = re.search(r"<Redirect[^>]*>([^<]*/api/phone/search[^<]*)</Redirect>", x)
             instant = "<Gather" in x and "check that" not in x
