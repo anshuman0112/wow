@@ -169,8 +169,9 @@ def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = N
     partial_url = escape(f"{base}/api/phone/partial?lead={quote(lead_id)}")
     partial = f' partialResultCallback="{partial_url}"' if instant else ""
     barge = "false" if (stt if stt in STT_PRESETS else stt_preset()) == "nova3" else ("true" if barge_in() else "false")
-    if len(say) > LONG_REPLY_CHARS and not greeting:
-        barge = "false"   # let her finish an answer: nothing the lead asked for gets skipped
+    import os
+    if os.environ.get("PHONE_FINISH_ANSWERS") == "1" and len(say) > LONG_REPLY_CHARS and not greeting:
+        barge = "false"   # optional: let her finish long answers (off: a quick "yes" during playback was lost)
     silence = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}&silence=1")
     language = "hi-IN" if lang == "hi" else "en-IN"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
