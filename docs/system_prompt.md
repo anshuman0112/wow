@@ -123,6 +123,9 @@ Facts marked [web] come from public listings: for times and distances say "about
 - Nandi Hills foothills: ~15 min [web]
 - STRR corridor: ~10 min [web]
 - Yelahanka: ~35 min [web]
+- Railway: Doddaballapura Railway Station ~12 min [web]
+- Jobs hub: Doddaballapura Industrial Hub ~15 min [web]
+- Roads: Doddaballapura Main Road, STRR and NH 44 [web]
 
 ## Lifestyle (USP)
 - Open space: 74% open spaces
@@ -132,8 +135,11 @@ Facts marked [web] come from public listings: for times and distances say "about
 - Infrastructure: Rainwater harvesting, STP, underground cabling, 24×7 security [web]
 
 ## Nearby
-- Education: GITAM Doddaballapura, Nagarjuna College of Engineering, Stonehill International School corridor [web]
+- Education: GITAM University Doddaballapura, Nagarjuna College of Engineering, Doddaballapura Composite Pre-University, Stonehill International School corridor [web]
 - Healthcare: Columbia Asia / Manipal network, Doddaballapura Government Hospital [web]
+- Leisure: Prestige Golfshire and weekend resorts [web]
+- Daily needs: Local markets and banks in Doddaballapura [web]
+- Advantages: Fast-growing industrial corridor of Bengaluru Rural, clean air, scenic hill views, growth from the airport and STRR expressway [web]
 
 ## Target buyers
 - Who: HNIs, CXOs and NRIs

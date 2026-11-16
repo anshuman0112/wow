@@ -263,15 +263,18 @@
         },
         {
           "k": "Railway",
-          "v": "Doddaballapura Railway Station ~12 min"
+          "v": "Doddaballapura Railway Station ~12 min",
+          "src": "web"
         },
         {
           "k": "Jobs hub",
-          "v": "Doddaballapura Industrial Hub ~15 min"
+          "v": "Doddaballapura Industrial Hub ~15 min",
+          "src": "web"
         },
         {
           "k": "Roads",
-          "v": "Doddaballapura Main Road, STRR and NH 44"
+          "v": "Doddaballapura Main Road, STRR and NH 44",
+          "src": "web"
         }
       ]
     },
@@ -320,15 +323,18 @@
         },
         {
           "k": "Leisure",
-          "v": "Prestige Golfshire and weekend resorts"
+          "v": "Prestige Golfshire and weekend resorts",
+          "src": "web"
         },
         {
           "k": "Daily needs",
-          "v": "Local markets and banks in Doddaballapura"
+          "v": "Local markets and banks in Doddaballapura",
+          "src": "web"
         },
         {
           "k": "Advantages",
-          "v": "Fast-growing industrial corridor of Bengaluru Rural, clean air, scenic hill views, growth from the airport and STRR expressway"
+          "v": "Fast-growing industrial corridor of Bengaluru Rural, clean air, scenic hill views, growth from the airport and STRR expressway",
+          "src": "web"
         }
       ]
     },
