@@ -175,10 +175,17 @@ class Groq:
         remaining, at = q
         return min(self.TPM, remaining + (time.time() - at) * self.TPM / 60)
 
+    # Backup AI when every Groq model is out of its free allowance (measured: Gemini ~1-1.5 s, Groq 0.3-0.6 s,
+    # so Groq stays first). Google's OpenAI-compatible endpoint; only used if GEMINI_API_KEY is set.
+    GEMINI_MODEL = "gemini-3.1-flash-lite"
+    GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+
     def _order(self, need: int) -> list[str]:
+        import os
         fits = [m for m in self.PHONE_MODELS if self._room(m) >= need]
         rest = sorted((m for m in self.PHONE_MODELS if m not in fits), key=self._room, reverse=True)
-        return fits + rest   # models that fit first (preferred order), then the fullest-bucket fallback
+        backup = [f"gemini:{os.environ.get('GEMINI_MODEL', self.GEMINI_MODEL)}"] if os.environ.get("GEMINI_API_KEY") else []
+        return fits + rest + backup   # models that fit first (preferred order), then the fullest bucket, then Gemini
 
     async def chat_json(self, messages: list[dict], max_tokens: int = 400, *, live: bool = False) -> dict:
         """JSON chat. live=True (a phone turn): short timeouts, quota-aware model choice, timings recorded."""
@@ -186,22 +193,42 @@ class Groq:
         need = sum(len(m.get("content") or "") for m in messages) // 4 + max_tokens
         attempts: list[dict] = []
         self.last_usage = {"model": "in-progress", "attempts": attempts}   # kept even if the caller times us out
+        import os
         for model in self._order(need):
-            body = {"model": model, "temperature": 0.2, "max_completion_tokens": max_tokens, "messages": messages}
-            if not live:   # live turns skip Groq's strict JSON check: it rejected some replies with a 400 (~0.5 s lost)
+            gemini = model.startswith("gemini:")
+            msgs = messages
+            if gemini and live:   # Gemini drifts from the script more than Groq: spell out the rule once more
+                msgs = messages + [{"role": "system", "content": (
+                    "STRICT: if the lead asked something, answer it in one sentence from FACTS. Then ask the NEXT FLOW step "
+                    "they have not answered yet, using the FLOW question's exact words. Never ask anything that is not in FLOW "
+                    "(not their current area, job or requirements). Never claim appreciation, returns or growth figures. Max 2 short sentences.")}]
+            body = {"model": model.split(":", 1)[1] if gemini else model, "temperature": 0.2, "messages": msgs}
+            body["max_tokens" if gemini else "max_completion_tokens"] = max_tokens
+            if not live and not gemini:   # live turns skip Groq's strict JSON check: it rejected some replies with a 400 (~0.5 s lost)
                 body["response_format"] = {"type": "json_object"}
             if model.startswith("openai/gpt-oss"):
                 body["reasoning_effort"] = "low"
+            if gemini:
+                body["reasoning_effort"] = "none"   # no thinking step: fastest reply
+                if live:   # a phone turn: hold Gemini to Divya's exact reply format
+                    body["response_format"] = {"type": "json_schema", "json_schema": {"name": "turn", "schema": {
+                        "type": "object", "required": ["reply", "end", "lang"], "properties": {
+                            "reply": {"type": "string"}, "end": {"type": "boolean"}, "lang": {"type": "string", "enum": ["en", "hi"]},
+                            "search": {"type": "string"}}}}}
+            url = self.GEMINI_URL if gemini else "https://api.groq.com/openai/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {os.environ.get('GEMINI_API_KEY', '')}"} if gemini else self.h
             t0 = time.perf_counter()
             try:
-                r = await self.http.post("https://api.groq.com/openai/v1/chat/completions", json=body, headers=self.h,
-                                         timeout=httpx.Timeout(1.8, connect=1.0) if live else httpx.Timeout(20.0, connect=5.0))
+                r = await self.http.post(url, json=body, headers=headers,
+                                         timeout=(httpx.Timeout(2.6 if gemini else 1.8, connect=1.0) if live
+                                                  else httpx.Timeout(20.0, connect=5.0)))
             except httpx.HTTPError as e:
                 attempts.append({"model": model, "status": type(e).__name__, "ms": round((time.perf_counter() - t0) * 1000)})
                 continue
             attempts.append({"model": model, "status": r.status_code, "ms": round((time.perf_counter() - t0) * 1000),
                              **({"why": r.text[:90]} if r.status_code != 200 else {})})
-            _note_quota(model, r)
+            if not gemini:
+                _note_quota(model, r)
             if r.status_code in (429, 503) or (r.status_code == 400 and ("model" in r.text.lower() or "json_validate" in r.text)):
                 last = r
                 continue  # rate-limited, model unavailable or bad JSON → try the next free model
@@ -209,6 +236,8 @@ class Groq:
             try:
                 j = r.json()
                 out = _loose_json(j["choices"][0]["message"]["content"] or "")
+                if live and not str(out.get("reply") or "").strip():
+                    raise KeyError("no reply")   # wrong shape: try the next model
             except (json.JSONDecodeError, KeyError, IndexError):
                 last = r
                 continue
