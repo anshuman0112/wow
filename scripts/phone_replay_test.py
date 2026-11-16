@@ -49,6 +49,10 @@ async def main() -> None:
         said = says(x)
         check(said.find("fifteen minutes") != -1 and said.find("fifteen minutes") < said.find("GITAM") and "Columbia" not in said,
               "'nearby school and how far is Nandi Hills?' -> Nandi Hills first, then schools only", said)
+        x = await lead("Can you tell me nearby schools, colleges and hospitals, how far is Nandhi Hills and what is the EMI?")
+        said = says(x)
+        check(all(w in said for w in ("fifteen minutes", "GITAM", "Columbia", "EMI")) and 'bargeIn="false"' in x,
+              "4 questions at once -> all answered, and she finishes without being cut off", said[:220])
         await lead("No. No one will be the part of this decision. But can you tell me and help me with the EMI and loan process?")
         x = await lead("Tomorrow, I")
         check("what time" in x.lower() and "<Hangup" not in x, "'Tomorrow, I…' -> asks for the time", says(x)[:120])

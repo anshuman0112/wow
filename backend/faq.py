@@ -116,7 +116,7 @@ def _detect(utterance: str) -> list[str]:
     found = [k for k, pat in INTENTS.items() if re.search(pat, u)]
     if "rate" in found and "size" in found and not re.search(SIZE_WORDS, u):
         found.remove("size")   # "price per square feet" is a rate question, not a plot-size one
-    return found[:3]
+    return found[:5]   # several questions at once: answer all of them
 
 
 def lang_of(utterance: str, current: str = "en") -> str:
@@ -539,7 +539,7 @@ def needs_search(utterance: str) -> dict | None:
 
 # "How far is Nandi Hills?" asks about ONE place: answer just that one, not the whole location list.
 ONE_PLACE = [
-    (r"\bnandi\b", "Nandi Hills foothills are just about fifteen minutes from the project.",
+    (r"\bnandh?i\b", "Nandi Hills foothills are just about fifteen minutes from the project.",
      "Nandi Hills foothills project se sirf pandrah minute door hain."),
     (r"\b(airport|kia|kempegowda)\b", "Kempegowda International Airport is about thirty to thirty-five minutes away.",
      "Kempegowda International Airport lagbhag tees se paintees minute door hai."),
@@ -560,6 +560,6 @@ def one_place(utterance: str, lang: str) -> str | None:
     if not re.search(DISTANCE + r"|\b(near|close|minutes?|kitna time)\b", u):
         return None
     hits = [(en, hi) for pat, en, hi in ONE_PLACE if re.search(pat, u)]
-    if not hits or len(hits) > 2:
+    if not hits or len(hits) > 3:
         return None
     return " ".join(h[0] if lang == "en" else h[1] for h in hits)

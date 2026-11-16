@@ -154,8 +154,14 @@ def instant_on() -> bool:
     return os.environ.get("PHONE_INSTANT", "0") == "1"
 
 
+# A reply that carries answers (facts, distances, the pitch) is longer than a plain question. The lead can't cut
+# into those: if they speak over Divya, Twilio stops her and the rest of the answer is lost. Short replies
+# (just a question) can still be interrupted, as before.
+LONG_REPLY_CHARS = 140
+
+
 def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = None, stt: str | None = None,
-                 instant: bool = False) -> str:
+                 instant: bool = False, greeting: bool = False) -> str:
     base = settings().public_base_url
     action = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}")
     # Instant mode: Twilio sends the words while the lead is still talking, so a plain "yes" can be
@@ -163,6 +169,8 @@ def twiml_gather(say: str, lead_id: str, lang: str = "en", voice: str | None = N
     partial_url = escape(f"{base}/api/phone/partial?lead={quote(lead_id)}")
     partial = f' partialResultCallback="{partial_url}"' if instant else ""
     barge = "false" if (stt if stt in STT_PRESETS else stt_preset()) == "nova3" else ("true" if barge_in() else "false")
+    if len(say) > LONG_REPLY_CHARS and not greeting:
+        barge = "false"   # let her finish an answer: nothing the lead asked for gets skipped
     silence = escape(f"{base}/api/phone/turn?lead={quote(lead_id)}&silence=1")
     language = "hi-IN" if lang == "hi" else "en-IN"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>'
@@ -268,7 +276,7 @@ async def start(http: httpx.AsyncClient, call_sid: str, lead_id: str, to_number:
     # Fast path: the call lives in Redis and is written to Supabase after hang-up (status callback).
     if not await cache.set_session(http, call_sid, row):
         await sb.upsert("calls", row, "vapi_call_id")
-    return twiml_gather(hello, lead.get("id") or "", voice=voice, stt=stt, instant=instant)
+    return twiml_gather(hello, lead.get("id") or "", voice=voice, stt=stt, instant=instant, greeting=True)
 
 
 async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str, silence: bool) -> str:
