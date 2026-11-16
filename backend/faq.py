@@ -344,8 +344,27 @@ def _complete_slot(slot: str, said: str) -> str:
 
 
 _CLOCK = re.compile(r"\b\d{1,2}([:.]\d{2})?\s*(am|pm|a\.m\.|p\.m\.|baje|o'?clock)\b|\b(morning|afternoon|evening|night|noon|subah|dopahar|shaam|raat)\b", re.I)
-_TIME_FOLLOWUP = re.compile(r"^Sure, (.+?)\. What time would suit you", re.I)
-_TIME_FOLLOWUP_HI = re.compile(r"^Theek hai, (.+?)\. Kis time", re.I)
+_TIME_FOLLOWUP = re.compile(r"Sure, (.+?)\. What time would suit you", re.I)
+_TIME_FOLLOWUP_HI = re.compile(r"Theek hai, (.+?)\. Kis time", re.I)
+# The day is known, the time answer came out as a scrap ("I", "Uh"): ask once more instead of booking without a time.
+TIME_RETRY = {"en": "Sorry, I missed that. ", "hi": "Maaf kijiye, sun nahi paayi. "}
+ANY_TIME = re.compile(r"\b(any ?time|whenever|anytime|you decide|koi bhi|kabhi bhi|fine|ok|okay|theek)\b", re.I)
+# Speech that stops right before the time ("Tomorrow, around", "Saturday at"): the lead paused, keep listening.
+TIME_DANGLING = re.compile(r"\b(around|at|by|about|maybe|after|before|like|between|baje)\s*[,.]?\s*$", re.I)
+
+
+def time_retry(messages: list[dict], lang: str) -> str | None:
+    last = (messages[-1]["text"] if messages and messages[-1]["role"] == "user" else "").strip()
+    prev = next((x["text"] for x in reversed(messages[:-1]) if x["role"] == "assistant"), "")
+    follow = _TIME_FOLLOWUP.search(prev) or _TIME_FOLLOWUP_HI.search(prev)
+    if not follow or prev.startswith(TIME_RETRY[lang].strip()) or prev.startswith(TIME_RETRY["en"].strip()):
+        return None   # not right after "what time?", or already asked twice: confirm the day as it is
+    words = re.findall(r"[a-z0-9]+", last.lower())
+    if _CLOCK.search(last) or re.search(r"\d", last) or ANY_TIME.search(last) or len(words) > 2:
+        return None
+    day = follow.group(1)
+    return TIME_RETRY[lang] + (f"Sure, {day}. What time would suit you for the call?" if lang == "en"
+                               else f"Theek hai, {day}. Kis time par call theek rahegi?")
 
 
 def time_followup(messages: list[dict], lang: str) -> str | None:
@@ -377,7 +396,13 @@ def slot_confirmation(messages: list[dict], lang: str) -> str | None:
     follow = _TIME_FOLLOWUP.search(prev_raw) or _TIME_FOLLOWUP_HI.search(prev_raw)
     if follow and not SLOT.search(last) and "?" not in last:
         # Answer to "Sure, tomorrow. What time would suit you?": "4 pm" -> day + time; "any time" -> the day as given.
-        last = f"{follow.group(1)} at {last.strip()}" if re.match(r"\s*\d", last) else             (f"{follow.group(1)} {last}" if _CLOCK.search(last) else follow.group(1))
+        said = last.strip().rstrip(".")
+        if re.match(r"\s*\d", said):
+            last = f"{follow.group(1)} at {said}"                # "4 pm" -> "tomorrow at 4 pm"
+        elif re.search(r"\d", said) or _CLOCK.search(said):
+            last = f"{follow.group(1)} {said.lower()}"           # "Around 4" -> "tomorrow around 4"
+        else:
+            last = follow.group(1)                               # "any time" -> the day as given
         low = last.lower() + " expert"
     m = SLOT.search(last)
     if not m:

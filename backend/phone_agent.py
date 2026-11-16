@@ -341,7 +341,11 @@ async def turn(http: httpx.AsyncClient, call_sid: str, lead_id: str, speech: str
     # Cut off mid-sentence ("can you please tell me when you…")? Don't answer half a question:
     # keep listening silently and join it with what they say next.
     # Only in the optional Nova-3 mode; the standard mode answers what Twilio heard, exactly as before.
-    if not answer_now and raw.get("stt") == "nova3" and looks_unfinished(speech, True) and not raw.get("pending"):
+    asked_slot = next((m["text"] for m in reversed(messages) if m["role"] == "assistant"), "")
+    stops_before_time = bool(faq.TIME_DANGLING.search(speech.strip())) and bool(
+        re.search(r"day and time|what time|which day|kis time|kab", asked_slot.lower()))
+    if not answer_now and not raw.get("pending") and (
+            stops_before_time or (raw.get("stt") == "nova3" and looks_unfinished(speech, True))):
         raw["pending"] = speech.strip()
         xml = twiml_listen(row.get("lead_id") or lead_id, raw.get("lang", "en"), raw.get("stt"), raw.get("instant", False))
         if fp:
@@ -607,6 +611,10 @@ async def rule_reply(http: httpx.AsyncClient, messages: list[dict], lang: str) -
     speech = messages[-1]["text"] if messages and messages[-1]["role"] == "user" else ""
     intents = faq.detect(speech)
     t0 = time.perf_counter()
+    again = faq.time_retry(messages, lang)
+    if again:   # "what time?" was answered with a scrap ("I"): ask once more, never book without a time
+        return {"reply": again, "end": False, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
+                "_usage": {"model": "rule:ask-time-again", "prompt_tokens": 0, "completion_tokens": 0}}
     ask_time = faq.time_followup(messages, lang)
     if ask_time:   # a day without a time: ask for the time before confirming the expert call
         return {"reply": ask_time, "end": False, "lang": lang, "_final": True, "_latency_s": round(time.perf_counter() - t0, 3),
